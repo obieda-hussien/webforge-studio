@@ -1,7 +1,5 @@
 package com.webforge.studio.model
 
-import kotlinx.coroutines.flow.Flow
-
 /**
  * Represents a top-level project inside WebForge Studio.
  *

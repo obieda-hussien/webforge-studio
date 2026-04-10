@@ -4,8 +4,8 @@ package com.webforge.studio.model
  * Theme configuration that drives both the design-system preview inside the
  * studio and the generated CSS / design tokens in the output.
  *
- * @param primaryColor    Hex string for the primary brand colour (e.g. "#6750A4").
- * @param secondaryColor  Hex string for the secondary colour.
+ * @param primaryColor    Hex string for the primary brand color (e.g. "#6750A4").
+ * @param secondaryColor  Hex string for the secondary color.
  * @param backgroundColor Hex string for the page / surface background.
  * @param fontFamily      Primary font-family name (e.g. "Inter", "Roboto").
  * @param baseFontSizeSp  Base body font size in sp / rem units.

@@ -15,10 +15,9 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
@@ -52,23 +51,25 @@ fun CssPropertyEditor(
     onPropertiesChange: (Map<String, String>) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    // Work with a mutable list of pairs so we can edit keys in-place
-    val pairs = remember(properties) { properties.entries.map { it.key to it.value }.toMutableList() }
+    // mutableStateListOf ensures each structural change triggers recomposition.
+    val pairs = remember { mutableStateListOf<Pair<String, String>>() }
+
+    // Sync pairs with the incoming properties whenever the external map changes.
+    LaunchedEffect(properties) {
+        pairs.clear()
+        pairs.addAll(properties.entries.map { it.key to it.value })
+    }
 
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         pairs.forEachIndexed { index, (key, value) ->
-            var currentKey by remember(key) { mutableStateOf(key) }
-            var currentValue by remember(value) { mutableStateOf(value) }
-
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 OutlinedTextField(
-                    value = currentKey,
+                    value = key,
                     onValueChange = { newKey ->
-                        currentKey = newKey
-                        pairs[index] = newKey to currentValue
+                        pairs[index] = newKey to value
                         onPropertiesChange(pairs.toMap())
                     },
                     label = { Text("Property") },
@@ -77,10 +78,9 @@ fun CssPropertyEditor(
                     textStyle = MaterialTheme.typography.bodySmall,
                 )
                 OutlinedTextField(
-                    value = currentValue,
+                    value = value,
                     onValueChange = { newValue ->
-                        currentValue = newValue
-                        pairs[index] = currentKey to newValue
+                        pairs[index] = key to newValue
                         onPropertiesChange(pairs.toMap())
                     },
                     label = { Text("Value") },
