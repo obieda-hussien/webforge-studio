@@ -1,15 +1,17 @@
 package com.webforge.studio.ui.canvas
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.webforge.studio.domain.usecase.GetProjectByIdUseCase
 import com.webforge.studio.engine.CodeGenerator
 import com.webforge.studio.engine.GeneratedCode
-import com.webforge.studio.engine.HtmlCodeGenerator
 import com.webforge.studio.model.ElementNode
 import com.webforge.studio.model.ElementType
 import com.webforge.studio.model.ProjectModel
-import com.webforge.studio.repository.ProjectRepository
+import com.webforge.studio.ui.util.UiText
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -17,22 +19,55 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
+import javax.inject.Inject
 
-data class CanvasUiState(
-    val project: ProjectModel? = null,
-    val elements: List<ElementNode> = emptyList(),
-    val selectedElementId: String? = null,
-    val isLoading: Boolean = true,
-    val generatedCode: GeneratedCode? = null,
-)
+// ---------------------------------------------------------------------------
+// MVI State
+// ---------------------------------------------------------------------------
 
-class CanvasViewModel(
-    private val projectId: String,
-    private val repository: ProjectRepository,
-    private val codeGenerator: CodeGenerator = HtmlCodeGenerator(),
+/** Sealed MVI state for the Canvas screen. */
+sealed interface CanvasUiState {
+    /** Project data is being loaded from the database. */
+    data object Loading : CanvasUiState
+
+    /** Project loaded; canvas is ready for interaction. */
+    data class Ready(
+        val project: ProjectModel,
+        val elements: List<ElementNode> = emptyList(),
+        val selectedElementId: String? = null,
+        val generatedCode: GeneratedCode? = null,
+    ) : CanvasUiState
+
+    /** The project with the given id was not found. */
+    data object ProjectNotFound : CanvasUiState
+
+    /** An unexpected error occurred. */
+    data class Error(val message: UiText) : CanvasUiState
+}
+
+// ---------------------------------------------------------------------------
+// ViewModel
+// ---------------------------------------------------------------------------
+
+/**
+ * ViewModel for [CanvasScreen].
+ *
+ * Reads the `projectId` navigation argument from [SavedStateHandle] so Hilt
+ * can inject it without a custom factory. Manages the element tree and
+ * delegates code generation to [CodeGenerator].
+ */
+@HiltViewModel
+class CanvasViewModel @Inject constructor(
+    savedStateHandle: SavedStateHandle,
+    private val getProjectById: GetProjectByIdUseCase,
+    private val codeGenerator: CodeGenerator,
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(CanvasUiState())
+    private val projectId: String = requireNotNull(savedStateHandle["projectId"]) {
+        "CanvasViewModel requires 'projectId' in SavedStateHandle"
+    }
+
+    private val _uiState = MutableStateFlow<CanvasUiState>(CanvasUiState.Loading)
     val uiState: StateFlow<CanvasUiState> = _uiState.asStateFlow()
 
     init {
@@ -40,30 +75,39 @@ class CanvasViewModel(
     }
 
     private fun loadProject() {
-        viewModelScope.launch {
-            val project = repository.getProjectById(projectId)
-            _uiState.update { it.copy(project = project, isLoading = false) }
+        val errorHandler = CoroutineExceptionHandler { _, throwable ->
+            _uiState.value = CanvasUiState.Error(
+                UiText.Raw(throwable.localizedMessage ?: "Failed to load project"),
+            )
+        }
+        viewModelScope.launch(errorHandler) {
+            val project = getProjectById(projectId)
+            _uiState.value = if (project != null) {
+                CanvasUiState.Ready(project = project)
+            } else {
+                CanvasUiState.ProjectNotFound
+            }
         }
     }
 
     @OptIn(ExperimentalUuidApi::class)
-    fun addElement(type: ElementType) {
-        val newElement = ElementNode(
-            id = Uuid.random().toString(),
-            type = type,
-            label = type.name.lowercase().replaceFirstChar { it.uppercase() },
-        )
-        _uiState.update { state ->
+    fun onAddElement(type: ElementType) {
+        updateReady { state ->
+            val newElement = ElementNode(
+                id = Uuid.random().toString(),
+                type = type,
+                label = type.name.lowercase().replaceFirstChar { it.uppercase() },
+            )
             state.copy(elements = state.elements + newElement)
         }
     }
 
-    fun selectElement(elementId: String?) {
-        _uiState.update { it.copy(selectedElementId = elementId) }
+    fun onSelectElement(elementId: String?) {
+        updateReady { it.copy(selectedElementId = elementId) }
     }
 
-    fun removeElement(elementId: String) {
-        _uiState.update { state ->
+    fun onRemoveElement(elementId: String) {
+        updateReady { state ->
             state.copy(
                 elements = state.elements.filterNot { it.id == elementId },
                 selectedElementId = if (state.selectedElementId == elementId) null
@@ -72,8 +116,8 @@ class CanvasViewModel(
         }
     }
 
-    fun updateElementProperties(elementId: String, properties: Map<String, String>) {
-        _uiState.update { state ->
+    fun onUpdateElementProperties(elementId: String, properties: Map<String, String>) {
+        updateReady { state ->
             state.copy(
                 elements = state.elements.map { element ->
                     if (element.id == elementId) element.copy(properties = properties)
@@ -83,8 +127,8 @@ class CanvasViewModel(
         }
     }
 
-    fun updateElementLabel(elementId: String, label: String) {
-        _uiState.update { state ->
+    fun onUpdateElementLabel(elementId: String, label: String) {
+        updateReady { state ->
             state.copy(
                 elements = state.elements.map { element ->
                     if (element.id == elementId) element.copy(label = label)
@@ -94,25 +138,22 @@ class CanvasViewModel(
         }
     }
 
-    fun generateCode() {
-        val state = _uiState.value
-        val project = state.project ?: return
+    fun onGenerateCode() {
+        val ready = _uiState.value as? CanvasUiState.Ready ?: return
         val root = ElementNode(
             id = "root",
             type = ElementType.CONTAINER,
             label = "root",
-            children = state.elements,
+            children = ready.elements,
         )
-        val generated = codeGenerator.generate(project, root)
-        _uiState.update { it.copy(generatedCode = generated) }
+        val generated = codeGenerator.generate(ready.project, root)
+        _uiState.update { (it as? CanvasUiState.Ready)?.copy(generatedCode = generated) ?: it }
     }
-}
 
-class CanvasViewModelFactory(
-    private val projectId: String,
-    private val repository: ProjectRepository,
-) : ViewModelProvider.Factory {
-    @Suppress("UNCHECKED_CAST")
-    override fun <T : ViewModel> create(modelClass: Class<T>): T =
-        CanvasViewModel(projectId = projectId, repository = repository) as T
+    /** Applies [transform] only when the state is [CanvasUiState.Ready]. */
+    private fun updateReady(transform: (CanvasUiState.Ready) -> CanvasUiState.Ready) {
+        _uiState.update { current ->
+            (current as? CanvasUiState.Ready)?.let(transform) ?: current
+        }
+    }
 }

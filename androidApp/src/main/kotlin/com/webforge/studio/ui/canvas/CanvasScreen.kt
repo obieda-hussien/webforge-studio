@@ -31,69 +31,85 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.webforge.studio.R
 import com.webforge.studio.model.ElementType
 import com.webforge.studio.ui.properties.PropertiesPanel
+import com.webforge.studio.ui.theme.Dimens
+import com.webforge.studio.ui.util.UiText
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CanvasScreen(
-    viewModel: CanvasViewModel,
     onBack: () -> Unit,
+    viewModel: CanvasViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var showAddMenu by remember { mutableStateOf(false) }
     var showCodeDialog by remember { mutableStateOf(false) }
 
-    val selectedElement = uiState.elements.firstOrNull { it.id == uiState.selectedElementId }
-    val (gestureState, gestureMod) = rememberCanvasGestureHandler(
-        onTap = { viewModel.selectElement(null) },
-    )
-
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(uiState.project?.name ?: "Canvas") },
+                title = {
+                    val title = (uiState as? CanvasUiState.Ready)?.project?.name
+                        ?: stringResource(R.string.canvas_title)
+                    Text(title)
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.navigate_back),
+                        )
                     }
                 },
                 actions = {
-                    IconButton(onClick = {
-                        viewModel.generateCode()
-                        showCodeDialog = true
-                    }) {
-                        Icon(Icons.Default.Code, contentDescription = "Generate code")
+                    if (uiState is CanvasUiState.Ready) {
+                        IconButton(onClick = {
+                            viewModel.onGenerateCode()
+                            showCodeDialog = true
+                        }) {
+                            Icon(
+                                Icons.Default.Code,
+                                contentDescription = stringResource(R.string.canvas_generate_code),
+                            )
+                        }
                     }
                 },
             )
         },
         floatingActionButton = {
-            Box {
-                FloatingActionButton(onClick = { showAddMenu = true }) {
-                    Icon(Icons.Default.Add, contentDescription = "Add element")
-                }
-                DropdownMenu(
-                    expanded = showAddMenu,
-                    onDismissRequest = { showAddMenu = false },
-                ) {
-                    ElementType.entries.forEach { type ->
-                        DropdownMenuItem(
-                            text = { Text(type.name) },
-                            onClick = {
-                                viewModel.addElement(type)
-                                showAddMenu = false
-                            },
+            if (uiState is CanvasUiState.Ready) {
+                Box {
+                    FloatingActionButton(onClick = { showAddMenu = true }) {
+                        Icon(
+                            Icons.Default.Add,
+                            contentDescription = stringResource(R.string.canvas_add_element),
                         )
+                    }
+                    DropdownMenu(
+                        expanded = showAddMenu,
+                        onDismissRequest = { showAddMenu = false },
+                    ) {
+                        ElementType.entries.forEach { type ->
+                            DropdownMenuItem(
+                                text = { Text(type.name) },
+                                onClick = {
+                                    viewModel.onAddElement(type)
+                                    showAddMenu = false
+                                },
+                            )
+                        }
                     }
                 }
             }
         },
     ) { innerPadding ->
-        when {
-            uiState.isLoading -> {
+        when (val state = uiState) {
+            is CanvasUiState.Loading -> {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -104,7 +120,34 @@ fun CanvasScreen(
                 }
             }
 
-            else -> {
+            is CanvasUiState.ProjectNotFound -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(stringResource(R.string.canvas_project_not_found))
+                }
+            }
+
+            is CanvasUiState.Error -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(state.message.asString())
+                }
+            }
+
+            is CanvasUiState.Ready -> {
+                val (gestureState, gestureMod) = rememberCanvasGestureHandler(
+                    onTap = { viewModel.onSelectElement(null) },
+                )
+                val selectedElement = state.elements.firstOrNull { it.id == state.selectedElementId }
+
                 Row(
                     modifier = Modifier
                         .fillMaxSize()
@@ -118,10 +161,10 @@ fun CanvasScreen(
                             .then(gestureMod),
                     ) {
                         CanvasEngineView(
-                            elements = uiState.elements,
-                            selectedId = uiState.selectedElementId,
+                            elements = state.elements,
+                            selectedId = state.selectedElementId,
                             panOffset = gestureState.panOffset,
-                            onElementTapped = { viewModel.selectElement(it) },
+                            onElementTapped = { viewModel.onSelectElement(it) },
                         )
                     }
 
@@ -129,44 +172,46 @@ fun CanvasScreen(
                     if (selectedElement != null) {
                         PropertiesPanel(
                             element = selectedElement,
-                            onLabelChange = { viewModel.updateElementLabel(selectedElement.id, it) },
-                            onPropertiesChange = { viewModel.updateElementProperties(selectedElement.id, it) },
-                            onDelete = { viewModel.removeElement(selectedElement.id) },
-                            modifier = Modifier.width(240.dp),
+                            onLabelChange = { viewModel.onUpdateElementLabel(selectedElement.id, it) },
+                            onPropertiesChange = {
+                                viewModel.onUpdateElementProperties(selectedElement.id, it)
+                            },
+                            onDelete = { viewModel.onRemoveElement(selectedElement.id) },
+                            modifier = Modifier.width(Dimens.PropertiesPanelWidth),
                         )
                     }
                 }
+
+                // Generated-code preview dialog
+                if (showCodeDialog) {
+                    val code = state.generatedCode?.files?.entries?.firstOrNull()
+                    AlertDialog(
+                        onDismissRequest = { showCodeDialog = false },
+                        title = { Text(stringResource(R.string.canvas_code_dialog_title)) },
+                        text = {
+                            Column {
+                                code?.let { (fileName, content) ->
+                                    Text(
+                                        text = fileName,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        modifier = Modifier.padding(bottom = Dimens.SpaceSm),
+                                    )
+                                    Text(
+                                        text = content,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        modifier = Modifier.fillMaxWidth(),
+                                    )
+                                } ?: Text(stringResource(R.string.canvas_code_dialog_empty))
+                            }
+                        },
+                        confirmButton = {
+                            TextButton(onClick = { showCodeDialog = false }) {
+                                Text(stringResource(R.string.dialog_close))
+                            }
+                        },
+                    )
+                }
             }
         }
-    }
-
-    // Generated-code preview dialog
-    if (showCodeDialog) {
-        val code = uiState.generatedCode?.files?.entries?.firstOrNull()
-        AlertDialog(
-            onDismissRequest = { showCodeDialog = false },
-            title = { Text("Generated Code") },
-            text = {
-                Column {
-                    code?.let { (fileName, content) ->
-                        Text(
-                            text = fileName,
-                            style = MaterialTheme.typography.labelMedium,
-                            modifier = Modifier.padding(bottom = 8.dp),
-                        )
-                        Text(
-                            text = content,
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    } ?: Text("No code generated yet.")
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showCodeDialog = false }) {
-                    Text("Close")
-                }
-            },
-        )
     }
 }

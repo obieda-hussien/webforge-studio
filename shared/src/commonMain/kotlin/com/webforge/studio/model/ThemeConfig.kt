@@ -1,5 +1,7 @@
 package com.webforge.studio.model
 
+import kotlinx.serialization.Serializable
+
 /**
  * Theme configuration that drives both the design-system preview inside the
  * studio and the generated CSS / design tokens in the output.
@@ -11,6 +13,7 @@ package com.webforge.studio.model
  * @param baseFontSizeSp  Base body font size in sp / rem units.
  * @param isDarkMode      Whether dark-mode tokens should be generated.
  */
+@Serializable
 data class ThemeConfig(
     val primaryColor: String = "#6750A4",
     val secondaryColor: String = "#625B71",

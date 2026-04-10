@@ -1,6 +1,7 @@
 package com.webforge.studio.ui.properties
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -17,9 +18,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
+import com.webforge.studio.R
 import com.webforge.studio.model.ElementNode
+import com.webforge.studio.ui.theme.Dimens
 
 /**
  * Side panel that displays and allows editing of the selected element's
@@ -41,29 +45,30 @@ fun PropertiesPanel(
     Surface(
         modifier = modifier.fillMaxHeight(),
         color = MaterialTheme.colorScheme.surfaceVariant,
-        tonalElevation = 2.dp,
+        tonalElevation = Dimens.ElevationMd,
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
-                .padding(12.dp),
+                .padding(Dimens.SpaceMd),
         ) {
             // Header
-            androidx.compose.foundation.layout.Row(
-                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-            ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = element.type.name,
                     style = MaterialTheme.typography.titleSmall,
                     modifier = Modifier.weight(1f),
                 )
                 IconButton(onClick = onDelete) {
-                    Icon(Icons.Default.Delete, contentDescription = "Delete element")
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = stringResource(R.string.canvas_delete_element),
+                    )
                 }
             }
 
-            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+            HorizontalDivider(modifier = Modifier.padding(vertical = Dimens.SpaceSm))
 
             // Label editor
             LabelEditor(
@@ -71,16 +76,16 @@ fun PropertiesPanel(
                 onLabelChange = onLabelChange,
             )
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(Dimens.SpaceMd))
 
             // CSS property editors
             Text(
-                text = "Styles",
+                text = stringResource(R.string.properties_styles_label),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(Dimens.SpaceSm))
 
             CssPropertyEditor(
                 properties = element.properties,

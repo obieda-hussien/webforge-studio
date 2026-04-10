@@ -8,14 +8,13 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.PrimaryKey
 import androidx.room.Query
-import androidx.room.Room
 import androidx.room.RoomDatabase
-import android.content.Context
 import com.webforge.studio.model.OutputType
 import com.webforge.studio.model.ProjectModel
 import com.webforge.studio.model.ThemeConfig
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import javax.inject.Inject
 
 // ---------------------------------------------------------------------------
 // Room Entity
@@ -134,10 +133,9 @@ abstract class WebForgeDatabase : RoomDatabase() {
 /**
  * Room-backed [ProjectRepository] for Android.
  *
- * Obtain an instance via [ProjectRepositoryImpl.create] to ensure the
- * [WebForgeDatabase] is initialised correctly.
+ * Instantiated and provided by Hilt via [com.webforge.studio.di.AppModule].
  */
-class ProjectRepositoryImpl(
+class ProjectRepositoryImpl @Inject constructor(
     private val dao: ProjectDao,
 ) : ProjectRepository {
 
@@ -152,17 +150,4 @@ class ProjectRepositoryImpl(
 
     override suspend fun deleteProject(id: String) =
         dao.deleteById(id)
-
-    companion object {
-        private const val DB_NAME = "webforge_studio.db"
-
-        fun create(context: Context): ProjectRepositoryImpl {
-            val db = Room.databaseBuilder(
-                context.applicationContext,
-                WebForgeDatabase::class.java,
-                DB_NAME,
-            ).build()
-            return ProjectRepositoryImpl(db.projectDao())
-        }
-    }
 }

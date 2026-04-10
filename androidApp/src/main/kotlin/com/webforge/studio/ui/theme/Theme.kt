@@ -65,6 +65,14 @@ private val DarkColorScheme = darkColorScheme(
     outlineVariant = OutlineVariantDark,
 )
 
+/**
+ * Root theme composable for WebForge Studio.
+ *
+ * Applies the full Material 3 Expressive token set:
+ * - Dynamic color scheme (light / dark)
+ * - [WebForgeTypography] — M3 type scale
+ * - [WebForgeShapes] — M3 Expressive rounded-corner scale
+ */
 @Composable
 fun WebForgeTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
@@ -85,6 +93,7 @@ fun WebForgeTheme(
     MaterialTheme(
         colorScheme = colorScheme,
         typography = WebForgeTypography,
+        shapes = WebForgeShapes,
         content = content,
     )
 }

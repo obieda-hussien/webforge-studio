@@ -19,7 +19,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
+import com.webforge.studio.R
+import com.webforge.studio.ui.theme.Dimens
 
 /**
  * Editable text field for the element's display label.
@@ -33,7 +35,7 @@ fun LabelEditor(
     OutlinedTextField(
         value = label,
         onValueChange = onLabelChange,
-        label = { Text("Label") },
+        label = { Text(stringResource(R.string.properties_label_field)) },
         singleLine = true,
         modifier = modifier.fillMaxWidth(),
     )
@@ -60,11 +62,11 @@ fun CssPropertyEditor(
         pairs.addAll(properties.entries.map { it.key to it.value })
     }
 
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(Dimens.SpaceSm)) {
         pairs.forEachIndexed { index, (key, value) ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(Dimens.SpaceXs),
             ) {
                 OutlinedTextField(
                     value = key,
@@ -72,7 +74,7 @@ fun CssPropertyEditor(
                         pairs[index] = newKey to value
                         onPropertiesChange(pairs.toMap())
                     },
-                    label = { Text("Property") },
+                    label = { Text(stringResource(R.string.properties_css_property_key)) },
                     singleLine = true,
                     modifier = Modifier.weight(1f),
                     textStyle = MaterialTheme.typography.bodySmall,
@@ -83,7 +85,7 @@ fun CssPropertyEditor(
                         pairs[index] = key to newValue
                         onPropertiesChange(pairs.toMap())
                     },
-                    label = { Text("Value") },
+                    label = { Text(stringResource(R.string.properties_css_property_value)) },
                     singleLine = true,
                     modifier = Modifier.weight(1f),
                     textStyle = MaterialTheme.typography.bodySmall,
@@ -96,7 +98,7 @@ fun CssPropertyEditor(
                 ) {
                     Icon(
                         Icons.Default.Delete,
-                        contentDescription = "Remove property",
+                        contentDescription = stringResource(R.string.properties_remove_property),
                         tint = MaterialTheme.colorScheme.error,
                     )
                 }
@@ -108,10 +110,13 @@ fun CssPropertyEditor(
                 pairs.add("" to "")
                 onPropertiesChange(pairs.toMap())
             },
-            modifier = Modifier.padding(top = 4.dp),
+            modifier = Modifier.padding(top = Dimens.SpaceXs),
         ) {
             Icon(Icons.Default.Add, contentDescription = null)
-            Text(text = "Add property", modifier = Modifier.padding(start = 4.dp))
+            Text(
+                text = stringResource(R.string.properties_add_property),
+                modifier = Modifier.padding(start = Dimens.SpaceXs),
+            )
         }
     }
 }

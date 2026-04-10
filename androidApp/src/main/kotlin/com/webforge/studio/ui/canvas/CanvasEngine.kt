@@ -20,9 +20,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.dp
 import com.webforge.studio.model.ElementNode
 import com.webforge.studio.model.ElementType
+import com.webforge.studio.ui.theme.Dimens
 
 /**
  * Visual canvas engine responsible for rendering the element tree and the
@@ -31,14 +31,14 @@ import com.webforge.studio.model.ElementType
 object CanvasEngine {
 
     /** Size of a single grid cell in density-independent pixels. */
-    val GRID_CELL_SIZE_DP: Dp = 24.dp
+    val GRID_CELL_SIZE_DP: Dp = Dimens.CanvasGridCellSize
 
     /**
      * Draws the dot-grid background used as a visual guide on the canvas surface.
      */
     fun DrawScope.drawGrid(
         gridColor: Color = Color(0xFFCAC4D0),
-        dotRadius: Float = 1.5f,
+        dotRadius: Float = Dimens.CanvasGridDotRadius,
     ) {
         val cellPx = GRID_CELL_SIZE_DP.toPx()
         var x = 0f
@@ -119,9 +119,12 @@ private fun ElementNodeView(
     Box(
         modifier = Modifier
             .offset { IntOffset(offset.x.toInt(), offset.y.toInt()) }
-            .size(width = 120.dp, height = 60.dp)
+            .size(width = Dimens.CanvasElementWidth, height = Dimens.CanvasElementHeight)
             .background(MaterialTheme.colorScheme.surfaceVariant)
-            .border(width = if (isSelected) 2.dp else 1.dp, color = borderColor)
+            .border(
+                width = if (isSelected) Dimens.CanvasElementBorderSelected else Dimens.CanvasElementBorderNormal,
+                color = borderColor,
+            )
             .clickable(onClick = onTap),
         contentAlignment = Alignment.Center,
     ) {
@@ -133,7 +136,7 @@ private fun ElementNodeView(
             Text(
                 text = node.label.ifBlank { node.type.name },
                 style = MaterialTheme.typography.labelSmall,
-                modifier = Modifier.padding(top = 2.dp),
+                modifier = Modifier.padding(top = Dimens.SpaceXxs),
             )
         }
     }

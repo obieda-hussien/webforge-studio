@@ -1,3 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- App -->
     <string name="app_name">WebForge Studio</string>
+
+    <!-- Navigation -->
+    <string name="navigate_back">Navigate back</string>
+
+    <!-- Home screen -->
+    <string name="home_fab_new_project">New project</string>
+    <string name="home_empty_title">No projects yet</string>
+    <string name="home_empty_hint">Tap + to create your first project</string>
+    <string name="home_delete_project">Delete project</string>
+
+    <!-- New-project screen -->
+    <string name="new_project_title">New Project</string>
+    <string name="new_project_name_label">Project name *</string>
+    <string name="new_project_description_label">Description (optional)</string>
+    <string name="new_project_output_type_label">Output type</string>
+    <string name="new_project_create_button">Create project</string>
+    <string name="new_project_name_empty_error">Project name cannot be empty</string>
+
+    <!-- Canvas screen -->
+    <string name="canvas_title">Canvas</string>
+    <string name="canvas_generate_code">Generate code</string>
+    <string name="canvas_add_element">Add element</string>
+    <string name="canvas_delete_element">Delete element</string>
+    <string name="canvas_project_not_found">Project not found</string>
+    <string name="canvas_code_dialog_title">Generated Code</string>
+    <string name="canvas_code_dialog_empty">No code generated yet.</string>
+
+    <!-- Properties panel -->
+    <string name="properties_styles_label">Styles</string>
+    <string name="properties_label_field">Label</string>
+    <string name="properties_css_property_key">Property</string>
+    <string name="properties_css_property_value">Value</string>
+    <string name="properties_remove_property">Remove property</string>
+    <string name="properties_add_property">Add property</string>
+
+    <!-- Generic -->
+    <string name="dialog_close">Close</string>
 </resources>

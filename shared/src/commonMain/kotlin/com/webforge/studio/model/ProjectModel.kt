@@ -1,5 +1,7 @@
 package com.webforge.studio.model
 
+import kotlinx.serialization.Serializable
+
 /**
  * Represents a top-level project inside WebForge Studio.
  *
@@ -11,6 +13,7 @@ package com.webforge.studio.model
  * @param outputType   Target output format (React, HTML, PWA, etc.).
  * @param themeConfig  Active theme configuration for this project.
  */
+@Serializable
 data class ProjectModel(
     val id: String,
     val name: String,
@@ -22,6 +25,7 @@ data class ProjectModel(
 )
 
 /** Supported code-generation output targets. */
+@Serializable
 enum class OutputType {
     HTML,
     REACT,

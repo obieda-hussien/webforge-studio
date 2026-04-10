@@ -1,6 +1,7 @@
 package com.webforge.studio.ui.newproject
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -21,97 +22,146 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.webforge.studio.R
 import com.webforge.studio.model.OutputType
+import com.webforge.studio.ui.theme.Dimens
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NewProjectScreen(
-    viewModel: NewProjectViewModel,
     onProjectCreated: (String) -> Unit,
     onBack: () -> Unit,
+    viewModel: NewProjectViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
 
-    // Navigate away as soon as a project is saved
-    LaunchedEffect(uiState.savedProjectId) {
-        uiState.savedProjectId?.let { onProjectCreated(it) }
+    // Navigate to canvas when the project is saved
+    LaunchedEffect(uiState) {
+        if (uiState is NewProjectUiState.Saved) {
+            onProjectCreated((uiState as NewProjectUiState.Saved).projectId)
+        }
+    }
+
+    // Show errors in a Snackbar then dismiss so the form re-appears
+    LaunchedEffect(uiState) {
+        if (uiState is NewProjectUiState.Error) {
+            snackbarHostState.showSnackbar((uiState as NewProjectUiState.Error).message.asString(context))
+            viewModel.onErrorDismissed()
+        }
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("New Project") },
+                title = { Text(stringResource(R.string.new_project_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.navigate_back),
+                        )
                     }
                 },
             )
         },
     ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .padding(horizontal = 16.dp)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            Spacer(modifier = Modifier.height(8.dp))
-
-            OutlinedTextField(
-                value = uiState.name,
-                onValueChange = viewModel::onNameChange,
-                label = { Text("Project name *") },
-                isError = uiState.nameError != null,
-                supportingText = uiState.nameError?.let { { Text(it) } },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-
-            OutlinedTextField(
-                value = uiState.description,
-                onValueChange = viewModel::onDescriptionChange,
-                label = { Text("Description (optional)") },
-                minLines = 3,
-                maxLines = 5,
-                modifier = Modifier.fillMaxWidth(),
-            )
-
-            Text(
-                text = "Output type",
-                style = MaterialTheme.typography.labelLarge,
-            )
-
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutputType.entries.forEach { type ->
-                    FilterChip(
-                        selected = uiState.outputType == type,
-                        onClick = { viewModel.onOutputTypeChange(type) },
-                        label = { Text(type.name) },
-                    )
+        when (val state = uiState) {
+            is NewProjectUiState.Saving -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CircularProgressIndicator()
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Button(
-                onClick = viewModel::saveProject,
-                enabled = !uiState.isSaving,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                if (uiState.isSaving) {
+            is NewProjectUiState.Saved -> {
+                // Navigation is triggered via LaunchedEffect above; show loading while it fires.
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding),
+                    contentAlignment = Alignment.Center,
+                ) {
                     CircularProgressIndicator()
-                } else {
-                    Text("Create project")
+                }
+            }
+
+            is NewProjectUiState.Editing, is NewProjectUiState.Error -> {
+                val form = (state as? NewProjectUiState.Editing)?.form
+                    ?: NewProjectFormState()
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding)
+                        .padding(horizontal = Dimens.SpaceLg)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(Dimens.SpaceLg),
+                ) {
+                    Spacer(modifier = Modifier.height(Dimens.SpaceSm))
+
+                    OutlinedTextField(
+                        value = form.name,
+                        onValueChange = viewModel::onNameChange,
+                        label = { Text(stringResource(R.string.new_project_name_label)) },
+                        isError = form.nameError != null,
+                        supportingText = form.nameError?.let { uiText -> { Text(uiText.asString()) } },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+
+                    OutlinedTextField(
+                        value = form.description,
+                        onValueChange = viewModel::onDescriptionChange,
+                        label = { Text(stringResource(R.string.new_project_description_label)) },
+                        minLines = 3,
+                        maxLines = 5,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+
+                    Text(
+                        text = stringResource(R.string.new_project_output_type_label),
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(Dimens.SpaceSm)) {
+                        OutputType.entries.forEach { type ->
+                            FilterChip(
+                                selected = form.outputType == type,
+                                onClick = { viewModel.onOutputTypeChange(type) },
+                                label = { Text(type.name) },
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(Dimens.SpaceSm))
+
+                    Button(
+                        onClick = viewModel::onSaveProject,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.new_project_create_button))
+                    }
                 }
             }
         }

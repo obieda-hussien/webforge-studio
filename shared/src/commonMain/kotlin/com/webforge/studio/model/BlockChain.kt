@@ -1,5 +1,7 @@
 package com.webforge.studio.model
 
+import kotlinx.serialization.Serializable
+
 /**
  * Placeholder for the visual logic / block-chain system.
  *
@@ -12,6 +14,7 @@ package com.webforge.studio.model
  * @param name   Human-readable name shown in the logic editor.
  * @param blocks Ordered sequence of logic blocks in this chain.
  */
+@Serializable
 data class BlockChain(
     val id: String,
     val name: String,
@@ -25,6 +28,7 @@ data class BlockChain(
  * @param blockType  The category / kind of action this block performs.
  * @param parameters Key-value parameters specific to [blockType].
  */
+@Serializable
 data class LogicBlock(
     val id: String,
     val blockType: BlockType,
@@ -32,6 +36,7 @@ data class LogicBlock(
 )
 
 /** Supported logic-block categories (placeholder list for Phase 1). */
+@Serializable
 enum class BlockType {
     TRIGGER,
     NAVIGATE,

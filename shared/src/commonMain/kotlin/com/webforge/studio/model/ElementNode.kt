@@ -1,5 +1,7 @@
 package com.webforge.studio.model
 
+import kotlinx.serialization.Serializable
+
 /**
  * A node in the visual canvas element tree.
  *
@@ -11,6 +13,7 @@ package com.webforge.studio.model
  * @param properties Arbitrary key-value style/attribute map (CSS-like).
  * @param children   Ordered list of child nodes.
  */
+@Serializable
 data class ElementNode(
     val id: String,
     val type: ElementType,
@@ -20,6 +23,7 @@ data class ElementNode(
 )
 
 /** Supported visual element types on the canvas. */
+@Serializable
 enum class ElementType {
     CONTAINER,
     TEXT,
