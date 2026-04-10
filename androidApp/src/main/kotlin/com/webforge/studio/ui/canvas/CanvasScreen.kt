@@ -9,18 +9,21 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Redo
+import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.Layers
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScrollableTabRow
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -35,10 +38,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.webforge.studio.R
-import com.webforge.studio.model.ElementType
+import com.webforge.studio.ui.component.WFEmptyState
 import com.webforge.studio.ui.properties.PropertiesPanel
 import com.webforge.studio.ui.theme.Dimens
-import com.webforge.studio.ui.util.UiText
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -47,7 +49,6 @@ fun CanvasScreen(
     viewModel: CanvasViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    var showAddMenu by remember { mutableStateOf(false) }
     var showCodeDialog by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -67,7 +68,43 @@ fun CanvasScreen(
                     }
                 },
                 actions = {
-                    if (uiState is CanvasUiState.Ready) {
+                    val ready = uiState as? CanvasUiState.Ready
+                    if (ready != null) {
+                        // Undo
+                        IconButton(
+                            onClick = viewModel::onUndo,
+                            enabled = ready.undoStack.isNotEmpty(),
+                        ) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.Undo,
+                                contentDescription = stringResource(R.string.canvas_undo),
+                            )
+                        }
+                        // Redo
+                        IconButton(
+                            onClick = viewModel::onRedo,
+                            enabled = ready.redoStack.isNotEmpty(),
+                        ) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.Redo,
+                                contentDescription = stringResource(R.string.canvas_redo),
+                            )
+                        }
+                        // Toggle palette
+                        IconButton(onClick = viewModel::onTogglePalette) {
+                            Icon(
+                                Icons.Default.Layers,
+                                contentDescription = stringResource(R.string.canvas_toggle_palette),
+                            )
+                        }
+                        // Toggle properties
+                        IconButton(onClick = viewModel::onToggleProperties) {
+                            Icon(
+                                Icons.Default.Settings,
+                                contentDescription = stringResource(R.string.canvas_toggle_properties),
+                            )
+                        }
+                        // Generate + preview code
                         IconButton(onClick = {
                             viewModel.onGenerateCode()
                             showCodeDialog = true
@@ -80,32 +117,6 @@ fun CanvasScreen(
                     }
                 },
             )
-        },
-        floatingActionButton = {
-            if (uiState is CanvasUiState.Ready) {
-                Box {
-                    FloatingActionButton(onClick = { showAddMenu = true }) {
-                        Icon(
-                            Icons.Default.Add,
-                            contentDescription = stringResource(R.string.canvas_add_element),
-                        )
-                    }
-                    DropdownMenu(
-                        expanded = showAddMenu,
-                        onDismissRequest = { showAddMenu = false },
-                    ) {
-                        ElementType.entries.forEach { type ->
-                            DropdownMenuItem(
-                                text = { Text(type.name) },
-                                onClick = {
-                                    viewModel.onAddElement(type)
-                                    showAddMenu = false
-                                },
-                            )
-                        }
-                    }
-                }
-            }
         },
     ) { innerPadding ->
         when (val state = uiState) {
@@ -121,14 +132,13 @@ fun CanvasScreen(
             }
 
             is CanvasUiState.ProjectNotFound -> {
-                Box(
+                WFEmptyState(
+                    title = stringResource(R.string.canvas_project_not_found),
+                    message = "",
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(innerPadding),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(stringResource(R.string.canvas_project_not_found))
-                }
+                )
             }
 
             is CanvasUiState.Error -> {
@@ -144,45 +154,107 @@ fun CanvasScreen(
 
             is CanvasUiState.Ready -> {
                 val (gestureState, gestureMod) = rememberCanvasGestureHandler(
-                    onTap = { viewModel.onSelectElement(null) },
+                    onZoomChange = viewModel::onZoomChange,
+                    onPanChange = viewModel::onPanChange,
                 )
-                val selectedElement = state.elements.firstOrNull { it.id == state.selectedElementId }
 
-                Row(
+                val selectedElement = state.elements.firstOrNull { it.id == state.selectedElementId }
+                val zoomPct = (state.zoomLevel * 100).toInt()
+
+                Column(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(innerPadding),
                 ) {
-                    // Canvas area
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxSize()
-                            .then(gestureMod),
-                    ) {
-                        CanvasEngineView(
-                            elements = state.elements,
-                            selectedId = state.selectedElementId,
-                            panOffset = gestureState.panOffset,
-                            onElementTapped = { viewModel.onSelectElement(it) },
-                        )
+                    // Page tabs + zoom indicator
+                    if (state.pages.isNotEmpty()) {
+                        ScrollableTabRow(
+                            selectedTabIndex = state.pages.indexOfFirst {
+                                it.id == state.currentPageId
+                            }.coerceAtLeast(0),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            state.pages.forEachIndexed { index, page ->
+                                Tab(
+                                    selected = page.id == state.currentPageId,
+                                    onClick = { viewModel.onSelectPage(page.id) },
+                                    text = { Text(page.name) },
+                                )
+                            }
+                            Tab(
+                                selected = false,
+                                onClick = viewModel::onAddPage,
+                                icon = {
+                                    Icon(
+                                        Icons.Default.Add,
+                                        contentDescription = stringResource(R.string.canvas_add_page),
+                                    )
+                                },
+                            )
+                        }
+                    } else {
+                        // Show add-page button when no pages exist
+                        TextButton(
+                            onClick = viewModel::onAddPage,
+                            modifier = Modifier.padding(horizontal = Dimens.SpaceLg),
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = null)
+                            Text(stringResource(R.string.canvas_add_page))
+                        }
                     }
 
-                    // Properties panel (shown when an element is selected)
-                    if (selectedElement != null) {
-                        PropertiesPanel(
-                            element = selectedElement,
-                            onLabelChange = { viewModel.onUpdateElementLabel(selectedElement.id, it) },
-                            onPropertiesChange = {
-                                viewModel.onUpdateElementProperties(selectedElement.id, it)
-                            },
-                            onDelete = { viewModel.onRemoveElement(selectedElement.id) },
-                            modifier = Modifier.width(Dimens.PropertiesPanelWidth),
-                        )
+                    Row(modifier = Modifier.weight(1f)) {
+                        // Left palette
+                        if (state.showPalette) {
+                            ElementPalette(
+                                onAddElement = viewModel::onAddElement,
+                            )
+                        }
+
+                        // Canvas viewport
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxSize()
+                                .then(gestureMod),
+                        ) {
+                            CanvasEngineView(
+                                elements = state.elements,
+                                selectedId = state.selectedElementId,
+                                zoom = state.zoomLevel,
+                                panOffset = state.panOffset,
+                                onElementTapped = viewModel::onSelectElement,
+                                onElementMoved = viewModel::onMoveElement,
+                                onBackgroundTap = { viewModel.onSelectElement(null) },
+                            )
+
+                            // Zoom level badge
+                            Text(
+                                text = "$zoomPct%",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .padding(Dimens.SpaceSm),
+                            )
+                        }
+
+                        // Right properties panel
+                        if (state.showProperties && selectedElement != null) {
+                            PropertiesPanel(
+                                element = selectedElement,
+                                onLabelChange = { viewModel.onUpdateElementLabel(selectedElement.id, it) },
+                                onPropertiesChange = {
+                                    viewModel.onUpdateElementProperties(selectedElement.id, it)
+                                },
+                                onDelete = { viewModel.onRemoveElement(selectedElement.id) },
+                                modifier = Modifier.width(Dimens.PropertiesPanelWidth),
+                            )
+                        }
                     }
                 }
 
-                // Generated-code preview dialog
+                // Code preview dialog
                 if (showCodeDialog) {
                     val code = state.generatedCode?.files?.entries?.firstOrNull()
                     AlertDialog(

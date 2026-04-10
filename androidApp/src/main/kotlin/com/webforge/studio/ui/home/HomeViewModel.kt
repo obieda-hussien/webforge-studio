@@ -38,15 +38,15 @@ sealed interface HomeUiState {
 // ---------------------------------------------------------------------------
 
 /**
- * ViewModel for [HomeScreen].
+ * ViewModel for the Home screen.
  *
  * Responsibilities:
  * - Observe the project list via [ObserveProjectsUseCase] and expose it as
- *   a [HomeUiState] [StateFlow].
+ *   [HomeUiState] [StateFlow].
+ * - Maintain a [searchQuery] and apply client-side filtering so search is
+ *   instantaneous without additional DB hits.
  * - Delegate project deletion to [DeleteProjectUseCase] with structured
- *   error handling.
- *
- * Injected by Hilt — no manual factory required.
+ *   error handling via [CoroutineExceptionHandler].
  */
 @HiltViewModel
 class HomeViewModel @Inject constructor(
@@ -56,6 +56,9 @@ class HomeViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow<HomeUiState>(HomeUiState.Loading)
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
+
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
     init {
         observeProjects()
@@ -68,11 +71,16 @@ class HomeViewModel @Inject constructor(
             .launchIn(viewModelScope)
     }
 
+    /** Updates the active search query. Filtering is done in the UI layer. */
+    fun onSearchQueryChange(query: String) {
+        _searchQuery.value = query
+    }
+
     /**
      * Deletes the project identified by [projectId].
      *
-     * Errors are surfaced as [HomeUiState.Error]; the previous success state
-     * is preserved so the list remains visible on transient failures.
+     * Errors surface as [HomeUiState.Error]; the existing list remains visible
+     * on transient failures so the user can retry.
      */
     fun onDeleteProject(projectId: String) {
         val errorHandler = CoroutineExceptionHandler { _, throwable ->

@@ -11,13 +11,14 @@ import androidx.room.Query
 import androidx.room.RoomDatabase
 import com.webforge.studio.model.OutputType
 import com.webforge.studio.model.ProjectModel
+import com.webforge.studio.model.TargetPlatform
 import com.webforge.studio.model.ThemeConfig
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 
 // ---------------------------------------------------------------------------
-// Room Entity
+// Room Entity — Project
 // ---------------------------------------------------------------------------
 
 @Entity(tableName = "projects")
@@ -28,6 +29,9 @@ data class ProjectEntity(
 
     @ColumnInfo(name = "name")
     val name: String,
+
+    @ColumnInfo(name = "slug")
+    val slug: String = "",
 
     @ColumnInfo(name = "description")
     val description: String,
@@ -40,6 +44,18 @@ data class ProjectEntity(
 
     @ColumnInfo(name = "output_type")
     val outputType: String,
+
+    @ColumnInfo(name = "target_platform")
+    val targetPlatform: String = TargetPlatform.HTML.name,
+
+    @ColumnInfo(name = "thumbnail_path")
+    val thumbnailPath: String? = null,
+
+    @ColumnInfo(name = "color_seed")
+    val colorSeed: Long = 0xFF6750A4,
+
+    @ColumnInfo(name = "font_pair")
+    val fontPair: String = "Inter / Roboto",
 
     // ThemeConfig fields stored as individual columns
     @ColumnInfo(name = "theme_primary_color")
@@ -62,16 +78,21 @@ data class ProjectEntity(
 )
 
 // ---------------------------------------------------------------------------
-// Mapping helpers
+// Mapping helpers — Project
 // ---------------------------------------------------------------------------
 
 private fun ProjectEntity.toDomain(): ProjectModel = ProjectModel(
     id = id,
     name = name,
+    slug = slug,
     description = description,
     createdAt = createdAt,
     updatedAt = updatedAt,
     outputType = OutputType.entries.firstOrNull { it.name == outputType } ?: OutputType.HTML,
+    targetPlatform = TargetPlatform.entries.firstOrNull { it.name == targetPlatform } ?: TargetPlatform.HTML,
+    thumbnailPath = thumbnailPath,
+    colorSeed = colorSeed,
+    fontPair = fontPair,
     themeConfig = ThemeConfig(
         primaryColor = themePrimaryColor,
         secondaryColor = themeSecondaryColor,
@@ -85,10 +106,15 @@ private fun ProjectEntity.toDomain(): ProjectModel = ProjectModel(
 private fun ProjectModel.toEntity(): ProjectEntity = ProjectEntity(
     id = id,
     name = name,
+    slug = slug,
     description = description,
     createdAt = createdAt,
     updatedAt = updatedAt,
     outputType = outputType.name,
+    targetPlatform = targetPlatform.name,
+    thumbnailPath = thumbnailPath,
+    colorSeed = colorSeed,
+    fontPair = fontPair,
     themePrimaryColor = themeConfig.primaryColor,
     themeSecondaryColor = themeConfig.secondaryColor,
     themeBackgroundColor = themeConfig.backgroundColor,
@@ -98,7 +124,7 @@ private fun ProjectModel.toEntity(): ProjectEntity = ProjectEntity(
 )
 
 // ---------------------------------------------------------------------------
-// DAO
+// DAO — Project
 // ---------------------------------------------------------------------------
 
 @Dao
@@ -118,16 +144,89 @@ interface ProjectDao {
 }
 
 // ---------------------------------------------------------------------------
-// Room Database
+// Room Entity — Page
 // ---------------------------------------------------------------------------
 
-@Database(entities = [ProjectEntity::class], version = 1, exportSchema = true)
-abstract class WebForgeDatabase : RoomDatabase() {
-    abstract fun projectDao(): ProjectDao
+@Entity(tableName = "pages")
+data class PageEntity(
+    @PrimaryKey
+    @ColumnInfo(name = "id")
+    val id: String,
+
+    @ColumnInfo(name = "project_id")
+    val projectId: String,
+
+    @ColumnInfo(name = "name")
+    val name: String,
+
+    @ColumnInfo(name = "route")
+    val route: String,
+
+    @ColumnInfo(name = "is_home")
+    val isHome: Boolean = false,
+
+    @ColumnInfo(name = "page_order")
+    val order: Int = 0,
+)
+
+// ---------------------------------------------------------------------------
+// Mapping helpers — Page
+// ---------------------------------------------------------------------------
+
+private fun PageEntity.toDomain() = com.webforge.studio.model.Page(
+    id = id,
+    projectId = projectId,
+    name = name,
+    route = route,
+    isHome = isHome,
+    order = order,
+)
+
+private fun com.webforge.studio.model.Page.toEntity() = PageEntity(
+    id = id,
+    projectId = projectId,
+    name = name,
+    route = route,
+    isHome = isHome,
+    order = order,
+)
+
+// ---------------------------------------------------------------------------
+// DAO — Page
+// ---------------------------------------------------------------------------
+
+@Dao
+interface PageDao {
+
+    @Query("SELECT * FROM pages WHERE project_id = :projectId ORDER BY page_order ASC")
+    fun observeByProject(projectId: String): Flow<List<PageEntity>>
+
+    @Query("SELECT * FROM pages WHERE id = :id LIMIT 1")
+    suspend fun getById(id: String): PageEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(entity: PageEntity)
+
+    @Query("DELETE FROM pages WHERE id = :id")
+    suspend fun deleteById(id: String)
 }
 
 // ---------------------------------------------------------------------------
-// Repository implementation
+// Room Database (version 2 — adds pages table + new project columns)
+// ---------------------------------------------------------------------------
+
+@Database(
+    entities = [ProjectEntity::class, PageEntity::class],
+    version = 2,
+    exportSchema = true,
+)
+abstract class WebForgeDatabase : RoomDatabase() {
+    abstract fun projectDao(): ProjectDao
+    abstract fun pageDao(): PageDao
+}
+
+// ---------------------------------------------------------------------------
+// Repository implementations
 // ---------------------------------------------------------------------------
 
 /**
@@ -149,5 +248,27 @@ class ProjectRepositoryImpl @Inject constructor(
         dao.upsert(project.toEntity())
 
     override suspend fun deleteProject(id: String) =
+        dao.deleteById(id)
+}
+
+/**
+ * Room-backed [PageRepository] for Android.
+ *
+ * Instantiated and provided by Hilt via [com.webforge.studio.di.AppModule].
+ */
+class PageRepositoryImpl @Inject constructor(
+    private val dao: PageDao,
+) : PageRepository {
+
+    override fun observeByProject(projectId: String): Flow<List<com.webforge.studio.model.Page>> =
+        dao.observeByProject(projectId).map { list -> list.map { it.toDomain() } }
+
+    override suspend fun getById(id: String): com.webforge.studio.model.Page? =
+        dao.getById(id)?.toDomain()
+
+    override suspend fun upsertPage(page: com.webforge.studio.model.Page) =
+        dao.upsert(page.toEntity())
+
+    override suspend fun deletePage(id: String) =
         dao.deleteById(id)
 }
