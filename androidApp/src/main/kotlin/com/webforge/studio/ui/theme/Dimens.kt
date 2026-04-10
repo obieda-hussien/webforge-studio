@@ -57,3 +57,21 @@ object Dimens {
     val ElevationLg = 4.dp
     val ElevationXl = 8.dp
 }
+
+/**
+ * 4-dp grid spacing constants aligned with Material Design spacing system.
+ * Exposed as [WFDimensions] for new code; [Dimens] remains for backward compatibility.
+ */
+object WFDimensions {
+    val dp4 = 4.dp
+    val dp8 = 8.dp
+    val dp12 = 12.dp
+    val dp16 = 16.dp
+    val dp20 = 20.dp
+    val dp24 = 24.dp
+    val dp32 = 32.dp
+    val dp40 = 40.dp
+    val dp48 = 48.dp
+    val dp56 = 56.dp
+    val dp64 = 64.dp
+}
