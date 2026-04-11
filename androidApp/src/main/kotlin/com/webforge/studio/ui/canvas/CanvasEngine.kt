@@ -6,6 +6,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
@@ -208,7 +209,7 @@ private fun DraggableElementView(
 }
 
 @Composable
-private fun SelectionHandles() {
+private fun BoxScope.SelectionHandles() {
     val handleColor = MaterialTheme.colorScheme.primary
     val handleSize = Dimens.SpaceSm
 
