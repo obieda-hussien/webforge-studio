@@ -19,6 +19,7 @@ kotlin-native/
 # Kotlin build outputs
 *.class
 *.jar
+!gradle/wrapper/gradle-wrapper.jar
 
 # Android
 *.apk
