@@ -2,9 +2,12 @@ package com.webforge.studio.ui.blockeditor
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -50,13 +53,19 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -71,6 +80,9 @@ import com.webforge.studio.model.BlockType
 import com.webforge.studio.model.displayName
 import com.webforge.studio.ui.component.WFEmptyState
 import com.webforge.studio.ui.component.WFTextField
+import com.webforge.studio.ui.theme.WFMotion
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -91,6 +103,7 @@ fun BlockEditorScreen(
             var varName by remember { mutableStateOf("") }
             var varType by remember { mutableStateOf("any") }
             var varDefault by remember { mutableStateOf("") }
+            val dragAndDropState = remember { DragAndDropState() }
 
             Scaffold(
                 topBar = {
@@ -168,17 +181,23 @@ fun BlockEditorScreen(
                             state = state,
                             onDeleteChain = viewModel::onDeleteChain,
                             onMoveBlock = viewModel::onMoveBlock,
+                            onReorderBlocks = viewModel::onReorderBlocks,
                             onDeleteBlock = viewModel::onDeleteBlock,
                             onDuplicateBlock = viewModel::onDuplicateBlock,
                             onToggleDisabled = viewModel::onToggleBlockDisabled,
                             onToggleCollapsed = viewModel::onToggleBlockCollapsed,
                             onUpdateParameter = viewModel::onUpdateParameter,
+                            dragAndDropState = dragAndDropState,
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxHeight(),
                         )
 
-                        AnimatedVisibility(visible = state.showVariableManager) {
+                        AnimatedVisibility(
+                            visible = state.showVariableManager,
+                            enter = WFMotion.enterFade,
+                            exit = WFMotion.exitFade,
+                        ) {
                             VariableManagerPanel(
                                 variables = viewModel.variablesInScope(),
                                 onAdd = { variableDialogVisible = true },
@@ -306,11 +325,13 @@ private fun BlockChainCanvas(
     state: BlockEditorUiState.Ready,
     onDeleteChain: (String) -> Unit,
     onMoveBlock: (String, Int) -> Unit,
+    onReorderBlocks: (List<String>) -> Unit,
     onDeleteBlock: (String) -> Unit,
     onDuplicateBlock: (String) -> Unit,
     onToggleDisabled: (String) -> Unit,
     onToggleCollapsed: (String) -> Unit,
     onUpdateParameter: (String, String, String) -> Unit,
+    dragAndDropState: DragAndDropState,
     modifier: Modifier = Modifier,
 ) {
     val chain = state.activeChain
@@ -324,6 +345,20 @@ private fun BlockChainCanvas(
     }
 
     val topBlocks = chain.blocks.filter { it.parentBlockId == null }.sortedBy { it.order }
+    var orderedTopBlockIds by remember(chain.id) { mutableStateOf(topBlocks.map { it.id }) }
+    val blockById = remember(topBlocks) { topBlocks.associateBy { it.id } }
+    val visibleBlocks by remember(orderedTopBlockIds, blockById) {
+        derivedStateOf { orderedTopBlockIds.mapNotNull { blockById[it] } }
+    }
+    val coroutineScope = rememberCoroutineScope()
+    val listState = rememberLazyListState()
+    val itemHeightsPx = remember { mutableStateMapOf<String, Int>() }
+
+    LaunchedEffect(topBlocks.map { it.id to it.order }) {
+        if (dragAndDropState.draggingBlockId == null) {
+            orderedTopBlockIds = topBlocks.map { it.id }
+        }
+    }
 
     Column(modifier = modifier.padding(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -340,19 +375,93 @@ private fun BlockChainCanvas(
                 modifier = Modifier.fillMaxWidth(),
             )
         } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                items(topBlocks, key = { it.id }) { node ->
+            Box(modifier = Modifier.fillMaxWidth()) {
+                val connectorColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
+                val connectorLines = remember(visibleBlocks, itemHeightsPx) {
+                    val centers = mutableListOf<Float>()
+                    var yCursor = 0f
+                    visibleBlocks.forEach { block ->
+                        val itemHeight = (itemHeightsPx[block.id] ?: 120).toFloat()
+                        centers += yCursor + (itemHeight / 2f)
+                        yCursor += itemHeight + 10f
+                    }
+                    centers.zipWithNext()
+                }
+                Canvas(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .padding(start = 18.dp),
+                ) {
+                    connectorLines.forEach { (startY, endY) ->
+                        drawLine(
+                            color = connectorColor,
+                            start = androidx.compose.ui.geometry.Offset(0f, startY),
+                            end = androidx.compose.ui.geometry.Offset(0f, endY),
+                            strokeWidth = 3f,
+                        )
+                    }
+                }
+
+                LazyColumn(
+                    state = listState,
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    userScrollEnabled = dragAndDropState.draggingBlockId == null,
+                ) {
+                    items(visibleBlocks, key = { it.id }) { node ->
                     val descriptor = BlockDescriptors.all.getValue(node.type)
                     val isCollapsed = state.collapsedBlockIds.contains(node.id)
                     var menuExpanded by remember { mutableStateOf(false) }
+                    val topIndex = visibleBlocks.indexOfFirst { it.id == node.id }
+                    val cardElevation by animateDpAsState(
+                        targetValue = if (dragAndDropState.draggingBlockId == node.id) 8.dp else 1.dp,
+                        animationSpec = WFMotion.fastSpatialDp,
+                        label = "blockElevation",
+                    )
 
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .animateContentSize(),
+                            .onSizeChanged { itemHeightsPx[node.id] = it.height }
+                            .pointerInput(node.id, visibleBlocks.size) {
+                                detectDragGesturesAfterLongPress(
+                                    onDragStart = {
+                                        dragAndDropState.startDragging(node.id, topIndex)
+                                    },
+                                    onDragEnd = {
+                                        val from = orderedTopBlockIds.indexOf(node.id)
+                                        val to = dragAndDropState.dropTargetIndex
+                                            .takeIf { it >= 0 && it < orderedTopBlockIds.size }
+                                            ?: from
+                                        if (from != -1 && to != -1 && from != to) {
+                                            val next = orderedTopBlockIds.toMutableList()
+                                            next.removeAt(from)
+                                            next.add(to, node.id)
+                                            orderedTopBlockIds = next
+                                            coroutineScope.launch {
+                                                delay(220)
+                                                onReorderBlocks(next)
+                                            }
+                                        }
+                                        dragAndDropState.clear()
+                                    },
+                                    onDragCancel = { dragAndDropState.clear() },
+                                ) { _, dragAmount ->
+                                    val itemHeight = itemHeightsPx[node.id]?.toFloat() ?: 100f
+                                    dragAndDropState.updateDrag(
+                                        dragDeltaY = dragAmount.y,
+                                        itemHeightPx = itemHeight,
+                                        listSize = visibleBlocks.size,
+                                        currentIndex = topIndex,
+                                    )
+                                }
+                            }
+                            .animateContentSize(
+                                animationSpec = WFMotion.defaultSpatialSize,
+                            ),
                         colors = CardDefaults.cardColors(
                             containerColor = MaterialTheme.colorScheme.surface,
                         ),
+                        elevation = CardDefaults.cardElevation(defaultElevation = cardElevation),
                     ) {
                         Column(
                             modifier = Modifier
@@ -416,7 +525,11 @@ private fun BlockChainCanvas(
                                 }
                             }
 
-                            AnimatedVisibility(visible = !isCollapsed) {
+                            AnimatedVisibility(
+                                visible = !isCollapsed,
+                                enter = WFMotion.enterFade,
+                                exit = WFMotion.exitFade,
+                            ) {
                                 Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
                                     descriptor.parameters.forEach { def ->
                                         ParameterEditor(
@@ -443,6 +556,7 @@ private fun BlockChainCanvas(
                         }
                     }
                 }
+            }
             }
         }
     }

@@ -201,6 +201,7 @@ data class BlockTypeDescriptor(
     val category: BlockCategory,
     val colorToken: BlockColorToken,
     val icon: String,
+    val eventType: BlockEventType? = null,
     val parameters: List<BlockParameterDefinition> = emptyList(),
     val hasBodySlot: Boolean = false,
     val hasNextConnector: Boolean = true,
@@ -211,16 +212,16 @@ object BlockDescriptors {
 
     val all: Map<BlockType, BlockTypeDescriptor> = buildMap {
         // Event
-        putEvent(BlockType.ON_CLICK, "On Click", "touch_app", "${'$'}{target}.addEventListener('click', async (event) => {\n${'$'}{body}\n});")
-        putEvent(BlockType.ON_LONG_PRESS, "On Long Press", "back_hand", "// long press event wrapper")
-        putEvent(BlockType.ON_HOVER_ENTER, "On Hover Enter", "ads_click", "${'$'}{target}.addEventListener('mouseenter', (event) => {\n${'$'}{body}\n});")
-        putEvent(BlockType.ON_HOVER_LEAVE, "On Hover Leave", "swipe", "${'$'}{target}.addEventListener('mouseleave', (event) => {\n${'$'}{body}\n});")
-        putEvent(BlockType.ON_SCROLL_INTO_VIEW, "On Scroll Into View", "visibility", "new IntersectionObserver((entries)=>{\n${'$'}{body}\n}).observe(${ '$' }{target});")
-        putEvent(BlockType.ON_PAGE_LOAD, "On Page Load", "home", "window.addEventListener('load', async () => {\n${'$'}{body}\n});")
-        putEvent(BlockType.ON_INPUT_CHANGE, "On Input Change", "edit", "${'$'}{target}.addEventListener('input', (event) => {\n${'$'}{body}\n});")
-        putEvent(BlockType.ON_FORM_SUBMIT, "On Form Submit", "send", "${'$'}{target}.addEventListener('submit', async (event) => {\nevent.preventDefault();\n${'$'}{body}\n});")
-        putEvent(BlockType.ON_KEY_PRESS, "On Key Press", "keyboard", "window.addEventListener('keydown', (event) => {\n${'$'}{body}\n});")
-        putEvent(BlockType.ON_DOUBLE_CLICK, "On Double Click", "ads_click", "${'$'}{target}.addEventListener('dblclick', (event) => {\n${'$'}{body}\n});")
+        putEvent(BlockType.ON_CLICK, BlockEventType.ON_CLICK, "On Click", "touch_app", "${'$'}{target}.addEventListener('click', async (event) => {\n${'$'}{body}\n});")
+        putEvent(BlockType.ON_LONG_PRESS, BlockEventType.ON_LONG_PRESS, "On Long Press", "back_hand", "// long press event wrapper")
+        putEvent(BlockType.ON_HOVER_ENTER, BlockEventType.ON_HOVER_ENTER, "On Hover Enter", "ads_click", "${'$'}{target}.addEventListener('mouseenter', (event) => {\n${'$'}{body}\n});")
+        putEvent(BlockType.ON_HOVER_LEAVE, BlockEventType.ON_HOVER_LEAVE, "On Hover Leave", "swipe", "${'$'}{target}.addEventListener('mouseleave', (event) => {\n${'$'}{body}\n});")
+        putEvent(BlockType.ON_SCROLL_INTO_VIEW, BlockEventType.ON_SCROLL_INTO_VIEW, "On Scroll Into View", "visibility", "new IntersectionObserver((entries)=>{\n${'$'}{body}\n}).observe(${ '$' }{target});")
+        putEvent(BlockType.ON_PAGE_LOAD, BlockEventType.ON_PAGE_LOAD, "On Page Load", "home", "window.addEventListener('load', async () => {\n${'$'}{body}\n});")
+        putEvent(BlockType.ON_INPUT_CHANGE, BlockEventType.ON_INPUT_CHANGE, "On Input Change", "edit", "${'$'}{target}.addEventListener('input', (event) => {\n${'$'}{body}\n});")
+        putEvent(BlockType.ON_FORM_SUBMIT, BlockEventType.ON_FORM_SUBMIT, "On Form Submit", "send", "${'$'}{target}.addEventListener('submit', async (event) => {\nevent.preventDefault();\n${'$'}{body}\n});")
+        putEvent(BlockType.ON_KEY_PRESS, BlockEventType.ON_KEY_PRESS, "On Key Press", "keyboard", "window.addEventListener('keydown', (event) => {\n${'$'}{body}\n});")
+        putEvent(BlockType.ON_DOUBLE_CLICK, BlockEventType.ON_DOUBLE_CLICK, "On Double Click", "ads_click", "${'$'}{target}.addEventListener('dblclick', (event) => {\n${'$'}{body}\n});")
 
         // Logic
         putLogic(BlockType.IF_CONDITION, "If Condition", "call_split", true, listOf(exprParam("condition", "Condition", "true")), "if (${ '$' }{condition}) {\n${'$'}{body}\n}")
@@ -321,8 +322,13 @@ object BlockDescriptors {
             .groupBy({ it.value.category }, { it.key to it.value })
             .mapValues { (_, values) -> values.sortedBy { it.second.displayName } }
 
+    fun descriptorForEvent(eventType: BlockEventType): BlockTypeDescriptor =
+        all.values.firstOrNull { it.category == BlockCategory.EVENT && it.eventType == eventType }
+            ?: all.getValue(BlockType.ON_CLICK)
+
     private fun MutableMap<BlockType, BlockTypeDescriptor>.putEvent(
         type: BlockType,
+        eventType: BlockEventType,
         name: String,
         icon: String,
         template: String,
@@ -334,6 +340,7 @@ object BlockDescriptors {
                 category = BlockCategory.EVENT,
                 colorToken = BlockColorToken.PURPLE,
                 icon = icon,
+                eventType = eventType,
                 hasBodySlot = true,
                 hasNextConnector = false,
                 codeTemplate = template,
@@ -349,7 +356,7 @@ object BlockDescriptors {
         parameters: List<BlockParameterDefinition>,
         template: String,
     ) {
-        put(type, BlockTypeDescriptor(name, BlockCategory.LOGIC, BlockColorToken.ORANGE, icon, parameters, hasBody, true, template))
+        put(type, BlockTypeDescriptor(name, BlockCategory.LOGIC, BlockColorToken.ORANGE, icon, null, parameters, hasBody, true, template))
     }
 
     private fun MutableMap<BlockType, BlockTypeDescriptor>.putDom(
@@ -359,7 +366,7 @@ object BlockDescriptors {
         parameters: List<BlockParameterDefinition>,
         template: String,
     ) {
-        put(type, BlockTypeDescriptor(name, BlockCategory.DOM, BlockColorToken.BLUE, icon, parameters, false, true, template))
+        put(type, BlockTypeDescriptor(name, BlockCategory.DOM, BlockColorToken.BLUE, icon, null, parameters, false, true, template))
     }
 
     private fun MutableMap<BlockType, BlockTypeDescriptor>.putStyle(
@@ -369,7 +376,7 @@ object BlockDescriptors {
         parameters: List<BlockParameterDefinition>,
         template: String,
     ) {
-        put(type, BlockTypeDescriptor(name, BlockCategory.STYLE, BlockColorToken.GREEN, icon, parameters, false, true, template))
+        put(type, BlockTypeDescriptor(name, BlockCategory.STYLE, BlockColorToken.GREEN, icon, null, parameters, false, true, template))
     }
 
     private fun MutableMap<BlockType, BlockTypeDescriptor>.putAnimation(
@@ -379,7 +386,7 @@ object BlockDescriptors {
         parameters: List<BlockParameterDefinition>,
         template: String,
     ) {
-        put(type, BlockTypeDescriptor(name, BlockCategory.ANIMATION, BlockColorToken.YELLOW, icon, parameters, false, true, template))
+        put(type, BlockTypeDescriptor(name, BlockCategory.ANIMATION, BlockColorToken.YELLOW, icon, null, parameters, false, true, template))
     }
 
     private fun MutableMap<BlockType, BlockTypeDescriptor>.putData(
@@ -389,7 +396,7 @@ object BlockDescriptors {
         parameters: List<BlockParameterDefinition>,
         template: String,
     ) {
-        put(type, BlockTypeDescriptor(name, BlockCategory.DATA, BlockColorToken.RED, icon, parameters, false, true, template))
+        put(type, BlockTypeDescriptor(name, BlockCategory.DATA, BlockColorToken.RED, icon, null, parameters, false, true, template))
     }
 
     private fun MutableMap<BlockType, BlockTypeDescriptor>.putNetwork(
@@ -400,7 +407,7 @@ object BlockDescriptors {
         parameters: List<BlockParameterDefinition>,
         template: String,
     ) {
-        put(type, BlockTypeDescriptor(name, BlockCategory.NETWORK, BlockColorToken.PURPLE, icon, parameters, hasBody, true, template))
+        put(type, BlockTypeDescriptor(name, BlockCategory.NETWORK, BlockColorToken.PURPLE, icon, null, parameters, hasBody, true, template))
     }
 
     private fun MutableMap<BlockType, BlockTypeDescriptor>.putNav(
@@ -410,7 +417,7 @@ object BlockDescriptors {
         parameters: List<BlockParameterDefinition>,
         template: String,
     ) {
-        put(type, BlockTypeDescriptor(name, BlockCategory.NAVIGATION, BlockColorToken.BLUE, icon, parameters, false, true, template))
+        put(type, BlockTypeDescriptor(name, BlockCategory.NAVIGATION, BlockColorToken.BLUE, icon, null, parameters, false, true, template))
     }
 
     private fun MutableMap<BlockType, BlockTypeDescriptor>.putUtility(
@@ -421,7 +428,7 @@ object BlockDescriptors {
         hasBody: Boolean,
         template: String,
     ) {
-        put(type, BlockTypeDescriptor(name, BlockCategory.UTILITY, BlockColorToken.GREEN, icon, parameters, hasBody, true, template))
+        put(type, BlockTypeDescriptor(name, BlockCategory.UTILITY, BlockColorToken.GREEN, icon, null, parameters, hasBody, true, template))
     }
 
     private fun textParam(name: String, label: String, default: String, varRef: Boolean = false) =
@@ -460,16 +467,3 @@ val BlockCategory.displayName: String
 
 val BlockEventType.displayName: String
     get() = name.lowercase().replace('_', ' ').replaceFirstChar { it.titlecase() }
-
-fun blockTypeForEvent(eventType: BlockEventType): BlockType = when (eventType) {
-    BlockEventType.ON_CLICK -> BlockType.ON_CLICK
-    BlockEventType.ON_LONG_PRESS -> BlockType.ON_LONG_PRESS
-    BlockEventType.ON_HOVER_ENTER -> BlockType.ON_HOVER_ENTER
-    BlockEventType.ON_HOVER_LEAVE -> BlockType.ON_HOVER_LEAVE
-    BlockEventType.ON_SCROLL_INTO_VIEW -> BlockType.ON_SCROLL_INTO_VIEW
-    BlockEventType.ON_PAGE_LOAD -> BlockType.ON_PAGE_LOAD
-    BlockEventType.ON_INPUT_CHANGE -> BlockType.ON_INPUT_CHANGE
-    BlockEventType.ON_FORM_SUBMIT -> BlockType.ON_FORM_SUBMIT
-    BlockEventType.ON_KEY_PRESS -> BlockType.ON_KEY_PRESS
-    BlockEventType.ON_DOUBLE_CLICK -> BlockType.ON_DOUBLE_CLICK
-}

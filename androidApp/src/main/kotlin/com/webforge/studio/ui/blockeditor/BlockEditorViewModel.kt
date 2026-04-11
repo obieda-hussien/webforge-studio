@@ -58,7 +58,6 @@ class BlockEditorViewModel @Inject constructor(
 
     private val elementId: String? = savedStateHandle.get<String>("elementId")?.takeUnless { it == "null" }
     private val undoRedo = UndoRedoManager<BlockEditorUiState.Ready>()
-    val dragAndDropState = DragAndDropState()
 
     private val _uiState = MutableStateFlow<BlockEditorUiState>(BlockEditorUiState.Loading)
     val uiState: StateFlow<BlockEditorUiState> = _uiState.asStateFlow()
@@ -167,6 +166,30 @@ class BlockEditorViewModel @Inject constructor(
             val moved = blocks.removeAt(index)
             blocks.add(newIndex, moved)
             chain.copy(blocks = blocks.mapIndexed { idx, node -> node.copy(order = idx) })
+        }
+    }
+
+    fun onReorderBlocks(orderedTopLevelBlockIds: List<String>) {
+        mutateActiveChain { chain ->
+            if (orderedTopLevelBlockIds.isEmpty()) return@mutateActiveChain chain
+            val orderLookup = orderedTopLevelBlockIds.withIndex().associate { it.value to it.index }
+            val topLevel = chain.blocks.filter { it.parentBlockId == null }
+            if (topLevel.none { it.id in orderLookup }) return@mutateActiveChain chain
+
+            val reorderedTop = topLevel
+                .sortedBy { orderLookup[it.id] ?: Int.MAX_VALUE }
+                .mapIndexed { index, node -> node.copy(order = index) }
+            val reorderedTopById = reorderedTop.associateBy { it.id }
+
+            val merged = chain.blocks
+                .map { node -> reorderedTopById[node.id] ?: node }
+                .sortedWith(
+                    compareBy<BlockNode> { it.parentBlockId != null }
+                        .thenBy { it.order },
+                )
+                .mapIndexed { index, node -> node.copy(order = index) }
+
+            chain.copy(blocks = merged)
         }
     }
 
