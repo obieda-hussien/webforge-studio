@@ -43,7 +43,7 @@ object CanvasEngine {
 
     /** Dot-grid background drawn via [DrawScope]. */
     fun DrawScope.drawGrid(
-        gridColor: Color = Color(0xFFCAC4D0),
+        gridColor: Color,
         dotRadius: Float = Dimens.CanvasGridDotRadius,
     ) {
         val cellPx = GRID_CELL_SIZE_DP.toPx()

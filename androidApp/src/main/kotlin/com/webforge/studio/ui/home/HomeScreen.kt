@@ -164,13 +164,7 @@ fun HomeScreen(
                 }
 
                 is HomeUiState.Success -> {
-                    val displayed = state.projects.filter { project ->
-                        searchQuery.isBlank() ||
-                            project.name.contains(searchQuery, ignoreCase = true) ||
-                            project.description.contains(searchQuery, ignoreCase = true)
-                    }
-
-                    if (displayed.isEmpty()) {
+                    if (state.projects.isEmpty()) {
                         WFEmptyState(
                             title = stringResource(R.string.home_empty_title),
                             message = stringResource(R.string.home_empty_hint),
@@ -192,7 +186,7 @@ fun HomeScreen(
                                 modifier = Modifier.fillMaxSize(),
                             ) {
                                 items(
-                                    items = displayed,
+                                    items = state.projects,
                                     key = { it.id },
                                 ) { project ->
                                     ProjectGridCard(

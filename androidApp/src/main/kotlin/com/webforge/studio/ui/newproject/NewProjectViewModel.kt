@@ -74,11 +74,27 @@ class NewProjectViewModel @Inject constructor(
     private val _uiState = MutableStateFlow<NewProjectUiState>(NewProjectUiState.Editing())
     val uiState: StateFlow<NewProjectUiState> = _uiState.asStateFlow()
 
+    /**
+     * Backing storage for form and step that survives state transitions to
+     * [NewProjectUiState.Saving] or [NewProjectUiState.Error].
+     *
+     * This ensures [onErrorDismissed] can restore the full form without losing
+     * any user input that was entered before the error occurred.
+     */
+    private var savedForm: NewProjectFormState = NewProjectFormState()
+    private var savedStep: Int = 1
+
     private val currentForm: NewProjectFormState
-        get() = (_uiState.value as? NewProjectUiState.Editing)?.form ?: NewProjectFormState()
+        get() = (_uiState.value as? NewProjectUiState.Editing)?.form ?: savedForm
 
     private val currentStep: Int
-        get() = (_uiState.value as? NewProjectUiState.Editing)?.step ?: 1
+        get() = (_uiState.value as? NewProjectUiState.Editing)?.step ?: savedStep
+
+    private fun setEditing(form: NewProjectFormState, step: Int) {
+        savedForm = form
+        savedStep = step
+        _uiState.value = NewProjectUiState.Editing(form = form, step = step)
+    }
 
     // ------------------------------------------------------------------
     // Step 1 — Identity
@@ -88,14 +104,14 @@ class NewProjectViewModel @Inject constructor(
         val slug = name.trim().lowercase()
             .replace(Regex("\\s+"), "-")
             .replace(Regex("[^a-z0-9\\-]"), "")
-        _uiState.value = NewProjectUiState.Editing(
+        setEditing(
             form = currentForm.copy(name = name, slug = slug, nameError = null),
             step = currentStep,
         )
     }
 
     fun onDescriptionChange(description: String) {
-        _uiState.value = NewProjectUiState.Editing(
+        setEditing(
             form = currentForm.copy(description = description),
             step = currentStep,
         )
@@ -106,7 +122,7 @@ class NewProjectViewModel @Inject constructor(
     // ------------------------------------------------------------------
 
     fun onTargetPlatformChange(platform: TargetPlatform) {
-        _uiState.value = NewProjectUiState.Editing(
+        setEditing(
             form = currentForm.copy(targetPlatform = platform),
             step = currentStep,
         )
@@ -117,21 +133,21 @@ class NewProjectViewModel @Inject constructor(
     // ------------------------------------------------------------------
 
     fun onColorSeedChange(seed: Long) {
-        _uiState.value = NewProjectUiState.Editing(
+        setEditing(
             form = currentForm.copy(colorSeed = seed),
             step = currentStep,
         )
     }
 
     fun onFontPairChange(fontPair: String) {
-        _uiState.value = NewProjectUiState.Editing(
+        setEditing(
             form = currentForm.copy(fontPair = fontPair),
             step = currentStep,
         )
     }
 
     fun onDarkModeToggle(isDark: Boolean) {
-        _uiState.value = NewProjectUiState.Editing(
+        setEditing(
             form = currentForm.copy(isDarkMode = isDark),
             step = currentStep,
         )
@@ -149,16 +165,13 @@ class NewProjectViewModel @Inject constructor(
         if (step == 1) {
             val nameError = validateName(form.name)
             if (nameError != null) {
-                _uiState.value = NewProjectUiState.Editing(
-                    form = form.copy(nameError = nameError),
-                    step = step,
-                )
+                setEditing(form = form.copy(nameError = nameError), step = step)
                 return
             }
         }
 
         if (step < 3) {
-            _uiState.value = NewProjectUiState.Editing(form = form, step = step + 1)
+            setEditing(form = form, step = step + 1)
         } else {
             saveProject(form)
         }
@@ -168,14 +181,19 @@ class NewProjectViewModel @Inject constructor(
     fun onBack() {
         val step = currentStep
         if (step > 1) {
-            _uiState.value = NewProjectUiState.Editing(form = currentForm, step = step - 1)
+            setEditing(form = currentForm, step = step - 1)
         }
     }
 
-    /** Returns to the Editing state after an error without losing form data. */
+    /**
+     * Returns to the Editing state after an error without losing form data.
+     *
+     * Uses [savedForm] and [savedStep] which are preserved through the
+     * [NewProjectUiState.Error] transition so no user input is lost.
+     */
     fun onErrorDismissed() {
         if (_uiState.value is NewProjectUiState.Error) {
-            _uiState.value = NewProjectUiState.Editing(form = currentForm, step = currentStep)
+            _uiState.value = NewProjectUiState.Editing(form = savedForm, step = savedStep)
         }
     }
 
@@ -184,6 +202,9 @@ class NewProjectViewModel @Inject constructor(
     // ------------------------------------------------------------------
 
     private fun saveProject(form: NewProjectFormState) {
+        // Persist form so onErrorDismissed() can restore it if creation fails.
+        savedForm = form
+        savedStep = currentStep
         val errorHandler = CoroutineExceptionHandler { _, throwable ->
             _uiState.value = NewProjectUiState.Error(
                 UiText.Raw(throwable.localizedMessage ?: "Failed to create project"),

@@ -1,6 +1,8 @@
 package com.webforge.studio.ui.properties
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.clickable
@@ -192,14 +194,28 @@ private fun CollapsibleSection(
             )
             Icon(
                 imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                contentDescription = if (expanded) "Collapse" else "Expand",
+                contentDescription = if (expanded) {
+                    stringResource(R.string.section_collapse)
+                } else {
+                    stringResource(R.string.section_expand)
+                },
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         AnimatedVisibility(
             visible = expanded,
-            enter = expandVertically(),
-            exit = shrinkVertically(),
+            enter = expandVertically(
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioNoBouncy,
+                    stiffness = Spring.StiffnessMediumLow,
+                ),
+            ),
+            exit = shrinkVertically(
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioNoBouncy,
+                    stiffness = Spring.StiffnessMediumLow,
+                ),
+            ),
         ) {
             Column(
                 modifier = Modifier

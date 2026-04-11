@@ -73,7 +73,7 @@ fun CanvasScreen(
                         // Undo
                         IconButton(
                             onClick = viewModel::onUndo,
-                            enabled = ready.undoStack.isNotEmpty(),
+                            enabled = ready.canUndo,
                         ) {
                             Icon(
                                 Icons.AutoMirrored.Filled.Undo,
@@ -83,7 +83,7 @@ fun CanvasScreen(
                         // Redo
                         IconButton(
                             onClick = viewModel::onRedo,
-                            enabled = ready.redoStack.isNotEmpty(),
+                            enabled = ready.canRedo,
                         ) {
                             Icon(
                                 Icons.AutoMirrored.Filled.Redo,

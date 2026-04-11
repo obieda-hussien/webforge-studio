@@ -69,8 +69,10 @@ sealed interface CanvasUiState {
         val panOffset: Offset = Offset.Zero,
         val pages: List<Page> = emptyList(),
         val currentPageId: String? = null,
-        val undoStack: List<CanvasCommand> = emptyList(),
-        val redoStack: List<CanvasCommand> = emptyList(),
+        /** True when at least one undo action is available. */
+        val canUndo: Boolean = false,
+        /** True when at least one redo action is available. */
+        val canRedo: Boolean = false,
         val showPalette: Boolean = true,
         val showProperties: Boolean = true,
     ) : CanvasUiState
@@ -92,7 +94,10 @@ sealed interface CanvasUiState {
  *
  * Manages:
  * - Element tree (add, move, resize, remove, update)
- * - Undo/redo via command pattern (max [MAX_HISTORY] entries)
+ * - Undo/redo via command pattern (max [MAX_HISTORY] entries); history is kept
+ *   private — the UI state only exposes [CanvasUiState.Ready.canUndo] and
+ *   [CanvasUiState.Ready.canRedo] booleans to avoid unnecessary recompositions
+ *   on every history change.
  * - Zoom and pan state
  * - Page management (observe + add)
  * - Code generation delegation
@@ -109,6 +114,11 @@ class CanvasViewModel @Inject constructor(
     private val projectId: String = requireNotNull(savedStateHandle["projectId"]) {
         "CanvasViewModel requires 'projectId' in SavedStateHandle"
     }
+
+    // Undo/redo history kept private — not part of UiState to avoid large list
+    // equality checks on every recomposition.
+    private val undoHistory = ArrayDeque<CanvasCommand>()
+    private val redoHistory = ArrayDeque<CanvasCommand>()
 
     private val _uiState = MutableStateFlow<CanvasUiState>(CanvasUiState.Loading)
     val uiState: StateFlow<CanvasUiState> = _uiState.asStateFlow()
@@ -164,11 +174,11 @@ class CanvasViewModel @Inject constructor(
                 x = (existingCount % 5) * 136f + 16f,
                 y = (existingCount / 5) * 76f + 16f,
             )
-            val cmd = CanvasCommand.AddElement(newElement)
+            pushUndo(CanvasCommand.AddElement(newElement))
             state.copy(
                 elements = state.elements + newElement,
-                undoStack = (state.undoStack + cmd).takeLast(MAX_HISTORY),
-                redoStack = emptyList(),
+                canUndo = undoHistory.isNotEmpty(),
+                canRedo = false,
                 selectedElementId = newElement.id,
             )
         }
@@ -181,13 +191,13 @@ class CanvasViewModel @Inject constructor(
     fun onRemoveElement(elementId: String) {
         updateReady { state ->
             val removed = state.elements.firstOrNull { it.id == elementId } ?: return@updateReady state
-            val cmd = CanvasCommand.RemoveElement(removed)
+            pushUndo(CanvasCommand.RemoveElement(removed))
             state.copy(
                 elements = state.elements.filterNot { it.id == elementId },
                 selectedElementId = if (state.selectedElementId == elementId) null
                 else state.selectedElementId,
-                undoStack = (state.undoStack + cmd).takeLast(MAX_HISTORY),
-                redoStack = emptyList(),
+                canUndo = undoHistory.isNotEmpty(),
+                canRedo = false,
             )
         }
     }
@@ -195,19 +205,21 @@ class CanvasViewModel @Inject constructor(
     fun onMoveElement(elementId: String, newX: Float, newY: Float) {
         updateReady { state ->
             val element = state.elements.firstOrNull { it.id == elementId } ?: return@updateReady state
-            val cmd = CanvasCommand.MoveElement(
-                id = elementId,
-                oldX = element.x,
-                oldY = element.y,
-                newX = newX,
-                newY = newY,
+            pushUndo(
+                CanvasCommand.MoveElement(
+                    id = elementId,
+                    oldX = element.x,
+                    oldY = element.y,
+                    newX = newX,
+                    newY = newY,
+                ),
             )
             state.copy(
                 elements = state.elements.map {
                     if (it.id == elementId) it.copy(x = newX, y = newY) else it
                 },
-                undoStack = (state.undoStack + cmd).takeLast(MAX_HISTORY),
-                redoStack = emptyList(),
+                canUndo = undoHistory.isNotEmpty(),
+                canRedo = false,
             )
         }
     }
@@ -215,13 +227,13 @@ class CanvasViewModel @Inject constructor(
     fun onUpdateElementProperties(elementId: String, properties: Map<String, String>) {
         updateReady { state ->
             val old = state.elements.firstOrNull { it.id == elementId }?.properties ?: return@updateReady state
-            val cmd = CanvasCommand.UpdateProperties(id = elementId, old = old, new = properties)
+            pushUndo(CanvasCommand.UpdateProperties(id = elementId, old = old, new = properties))
             state.copy(
                 elements = state.elements.map { element ->
                     if (element.id == elementId) element.copy(properties = properties) else element
                 },
-                undoStack = (state.undoStack + cmd).takeLast(MAX_HISTORY),
-                redoStack = emptyList(),
+                canUndo = undoHistory.isNotEmpty(),
+                canRedo = false,
             )
         }
     }
@@ -241,27 +253,34 @@ class CanvasViewModel @Inject constructor(
     // ------------------------------------------------------------------
 
     fun onUndo() {
+        val cmd = undoHistory.removeLastOrNull() ?: return
+        redoHistory.addLast(cmd)
         updateReady { state ->
-            val cmd = state.undoStack.lastOrNull() ?: return@updateReady state
-            val elements = applyInverse(cmd, state.elements)
             state.copy(
-                elements = elements,
-                undoStack = state.undoStack.dropLast(1),
-                redoStack = state.redoStack + cmd,
+                elements = applyInverse(cmd, state.elements),
+                canUndo = undoHistory.isNotEmpty(),
+                canRedo = redoHistory.isNotEmpty(),
             )
         }
     }
 
     fun onRedo() {
+        val cmd = redoHistory.removeLastOrNull() ?: return
+        undoHistory.addLast(cmd)
         updateReady { state ->
-            val cmd = state.redoStack.lastOrNull() ?: return@updateReady state
-            val elements = applyCommand(cmd, state.elements)
             state.copy(
-                elements = elements,
-                redoStack = state.redoStack.dropLast(1),
-                undoStack = state.undoStack + cmd,
+                elements = applyCommand(cmd, state.elements),
+                canUndo = undoHistory.isNotEmpty(),
+                canRedo = redoHistory.isNotEmpty(),
             )
         }
+    }
+
+    /** Pushes [cmd] onto the undo stack, enforcing [MAX_HISTORY], and clears redo. */
+    private fun pushUndo(cmd: CanvasCommand) {
+        undoHistory.addLast(cmd)
+        if (undoHistory.size > MAX_HISTORY) undoHistory.removeFirst()
+        redoHistory.clear()
     }
 
     private fun applyCommand(cmd: CanvasCommand, elements: List<ElementNode>): List<ElementNode> =
