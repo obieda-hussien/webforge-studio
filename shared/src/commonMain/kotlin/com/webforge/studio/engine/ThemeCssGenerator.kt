@@ -4,6 +4,19 @@ import com.webforge.studio.model.BorderRadiusPreset
 import com.webforge.studio.model.ThemeConfig
 
 object ThemeCssGenerator {
+    private val reservedVariableNames = setOf(
+        "wf-color-primary",
+        "wf-color-secondary",
+        "wf-color-background",
+        "wf-font-primary",
+        "wf-font-secondary",
+        "wf-font-size-base",
+        "wf-spacing-base",
+        "wf-radius",
+        "wf-radius-sharp",
+        "wf-radius-rounded",
+        "wf-radius-pill",
+    )
 
     fun toCss(theme: ThemeConfig): String = buildString {
         appendLine(":root {")
@@ -18,12 +31,19 @@ object ThemeCssGenerator {
         appendLine("  --wf-radius-sharp: 4px;")
         appendLine("  --wf-radius-rounded: 12px;")
         appendLine("  --wf-radius-pill: 999px;")
-        theme.cssVariables.forEach { (name, value) ->
-            val cleanName = name.trim().removePrefix("--")
-            if (cleanName.isNotBlank() && value.isNotBlank()) {
-                appendLine("  --$cleanName: $value;")
+        val customVars = theme.cssVariables.entries
+            .mapNotNull { (name, value) ->
+                val cleanName = name.trim().removePrefix("--")
+                val cleanValue = value.trim()
+                when {
+                    cleanName.isBlank() || cleanValue.isBlank() -> null
+                    cleanName in reservedVariableNames -> null
+                    else -> cleanName to cleanValue
+                }
             }
-        }
+            .sortedBy { it.first }
+            .distinctBy { it.first }
+        customVars.forEach { (name, value) -> appendLine("  --$name: $value;") }
         appendLine("}")
         appendLine()
         appendLine("body {")

@@ -68,6 +68,17 @@ class ReactCodeGenerator : CodeGenerator {
             appendLine("  );")
             appendLine("}")
         }
+        val main = buildString {
+            appendLine("import React from \"react\";")
+            appendLine("import { createRoot } from \"react-dom/client\";")
+            appendLine("import App from \"./App.jsx\";")
+            appendLine()
+            appendLine("createRoot(document.getElementById(\"root\")).render(")
+            appendLine("  <React.StrictMode>")
+            appendLine("    <App />")
+            appendLine("  </React.StrictMode>,")
+            appendLine(");")
+        }
         val indexHtml = buildString {
             appendLine("<!doctype html>")
             appendLine("<html lang=\"en\">")
@@ -78,14 +89,47 @@ class ReactCodeGenerator : CodeGenerator {
             appendLine("</head>")
             appendLine("<body>")
             appendLine("  <div id=\"root\"></div>")
+            appendLine("  <script type=\"module\" src=\"/main.jsx\"></script>")
             appendLine("</body>")
             appendLine("</html>")
+        }
+        val packageJson = buildString {
+            appendLine("{")
+            appendLine("  \"name\": \"${slugify(project.name)}\",")
+            appendLine("  \"private\": true,")
+            appendLine("  \"version\": \"1.0.0\",")
+            appendLine("  \"type\": \"module\",")
+            appendLine("  \"scripts\": {")
+            appendLine("    \"dev\": \"vite\",")
+            appendLine("    \"build\": \"vite build\",")
+            appendLine("    \"preview\": \"vite preview\"")
+            appendLine("  },")
+            appendLine("  \"dependencies\": {")
+            appendLine("    \"react\": \"^18.3.1\",")
+            appendLine("    \"react-dom\": \"^18.3.1\"")
+            appendLine("  },")
+            appendLine("  \"devDependencies\": {")
+            appendLine("    \"@vitejs/plugin-react\": \"^4.3.1\",")
+            appendLine("    \"vite\": \"^5.4.10\"")
+            appendLine("  }")
+            appendLine("}")
+        }
+        val viteConfig = buildString {
+            appendLine("import { defineConfig } from \"vite\";")
+            appendLine("import react from \"@vitejs/plugin-react\";")
+            appendLine()
+            appendLine("export default defineConfig({")
+            appendLine("  plugins: [react()],")
+            appendLine("});")
         }
         return GeneratedCode(
             files = mapOf(
                 "App.jsx" to app,
+                "main.jsx" to main,
                 "index.html" to indexHtml,
                 "theme.css" to ThemeCssGenerator.toCss(project.themeConfig),
+                "package.json" to packageJson,
+                "vite.config.js" to viteConfig,
             ),
         )
     }
@@ -111,6 +155,7 @@ private fun renderSeoTags(seo: SEOConfig, fallbackTitle: String, indent: String)
     if (seo.twitterDescription.isNotBlank()) appendLine("$indent<meta name=\"twitter:description\" content=\"${escapeHtml(seo.twitterDescription)}\" />")
     if (seo.twitterImage.isNotBlank()) appendLine("$indent<meta name=\"twitter:image\" content=\"${escapeHtml(seo.twitterImage)}\" />")
     appendLine("$indent<meta name=\"twitter:card\" content=\"${seo.twitterCard.value}\" />")
+    appendLine("$indent<meta http-equiv=\"Content-Security-Policy\" content=\"${escapeHtml(defaultCspValue())}\" />")
     val safeJsonLd = sanitizeJsonLd(seo.structuredDataJson)
     if (!safeJsonLd.isNullOrBlank()) {
         appendLine("$indent<script type=\"application/ld+json\">")
@@ -122,16 +167,17 @@ private fun renderSeoTags(seo: SEOConfig, fallbackTitle: String, indent: String)
 private fun renderHtmlElement(node: ElementNode, indentLevel: Int): String {
     val indent = "  ".repeat(indentLevel)
     val styleAttr = styleAttribute(node.properties)
+    val classAttr = classAttribute(node.properties)
     return buildString {
         when (node.type) {
-            ElementType.TEXT -> appendLine("$indent<p$styleAttr>${escapeHtml(node.label)}</p>")
-            ElementType.BUTTON -> appendLine("$indent<button$styleAttr>${escapeHtml(node.label)}</button>")
-            ElementType.IMAGE -> appendLine("$indent<img src=\"${escapeHtml(node.properties["src"] ?: "")}\" alt=\"${escapeHtml(node.label.ifBlank { "image" })}\"$styleAttr />")
-            ElementType.INPUT -> appendLine("$indent<input placeholder=\"${escapeHtml(node.label)}\"$styleAttr />")
-            ElementType.LINK -> appendLine("$indent<a href=\"${escapeHtml(node.properties["href"] ?: "#")}\"$styleAttr>${escapeHtml(node.label)}</a>")
-            ElementType.DIVIDER -> appendLine("$indent<hr$styleAttr />")
+            ElementType.TEXT -> appendLine("$indent<p$classAttr$styleAttr>${escapeHtml(node.label)}</p>")
+            ElementType.BUTTON -> appendLine("$indent<button$classAttr$styleAttr>${escapeHtml(node.label)}</button>")
+            ElementType.IMAGE -> appendLine("$indent<img src=\"${escapeHtml(node.properties["src"] ?: "")}\" alt=\"${escapeHtml(node.label.ifBlank { "image" })}\"$classAttr$styleAttr />")
+            ElementType.INPUT -> appendLine("$indent<input placeholder=\"${escapeHtml(node.label)}\"$classAttr$styleAttr />")
+            ElementType.LINK -> appendLine("$indent<a href=\"${escapeHtml(node.properties["href"] ?: "#")}\"$classAttr$styleAttr>${escapeHtml(node.label)}</a>")
+            ElementType.DIVIDER -> appendLine("$indent<hr$classAttr$styleAttr />")
             else -> {
-                appendLine("$indent<div$styleAttr>")
+                appendLine("$indent<div$classAttr$styleAttr>")
                 node.children.forEach { append(renderHtmlElement(it, indentLevel + 1)) }
                 appendLine("$indent</div>")
             }
@@ -141,20 +187,24 @@ private fun renderHtmlElement(node: ElementNode, indentLevel: Int): String {
 
 private fun renderReactElement(node: ElementNode, indentLevel: Int): String {
     val indent = "  ".repeat(indentLevel)
-    val style = node.properties.entries.joinToString(", ") {
+    val style = node.properties
+        .filterKeys { !isNativeElementAttribute(it) }
+        .entries
+        .joinToString(", ") {
         "\"${toReactStyleKey(it.key)}\": \"${escapeJsString(it.value)}\""
     }
     val styleAttr = if (style.isBlank()) "" else " style={{ $style }}"
+    val classNameAttr = reactClassAttribute(node.properties)
     return buildString {
         when (node.type) {
-            ElementType.TEXT -> appendLine("$indent<p$styleAttr>${escapeHtml(node.label)}</p>")
-            ElementType.BUTTON -> appendLine("$indent<button$styleAttr>${escapeHtml(node.label)}</button>")
-            ElementType.IMAGE -> appendLine("$indent<img src=\"${escapeHtml(node.properties["src"] ?: "")}\" alt=\"${escapeHtml(node.label.ifBlank { "image" })}\"$styleAttr />")
-            ElementType.INPUT -> appendLine("$indent<input placeholder=\"${escapeHtml(node.label)}\"$styleAttr />")
-            ElementType.LINK -> appendLine("$indent<a href=\"${escapeHtml(node.properties["href"] ?: "#")}\"$styleAttr>${escapeHtml(node.label)}</a>")
-            ElementType.DIVIDER -> appendLine("$indent<hr$styleAttr />")
+            ElementType.TEXT -> appendLine("$indent<p$classNameAttr$styleAttr>${escapeHtml(node.label)}</p>")
+            ElementType.BUTTON -> appendLine("$indent<button$classNameAttr$styleAttr>${escapeHtml(node.label)}</button>")
+            ElementType.IMAGE -> appendLine("$indent<img src=\"${escapeHtml(node.properties["src"] ?: "")}\" alt=\"${escapeHtml(node.label.ifBlank { "image" })}\"$classNameAttr$styleAttr />")
+            ElementType.INPUT -> appendLine("$indent<input placeholder=\"${escapeHtml(node.label)}\"$classNameAttr$styleAttr />")
+            ElementType.LINK -> appendLine("$indent<a href=\"${escapeHtml(node.properties["href"] ?: "#")}\"$classNameAttr$styleAttr>${escapeHtml(node.label)}</a>")
+            ElementType.DIVIDER -> appendLine("$indent<hr$classNameAttr$styleAttr />")
             else -> {
-                appendLine("$indent<div$styleAttr>")
+                appendLine("$indent<div$classNameAttr$styleAttr>")
                 node.children.forEach { append(renderReactElement(it, indentLevel + 1)) }
                 appendLine("$indent</div>")
             }
@@ -163,9 +213,25 @@ private fun renderReactElement(node: ElementNode, indentLevel: Int): String {
 }
 
 private fun styleAttribute(properties: Map<String, String>): String {
-    if (properties.isEmpty()) return ""
-    val css = properties.entries.joinToString("; ") { (k, v) -> "$k: $v" }
+    val styleProperties = properties.filterKeys { !isNativeElementAttribute(it) }
+    if (styleProperties.isEmpty()) return ""
+    val css = styleProperties.entries.joinToString("; ") { (k, v) -> "$k: $v" }
     return " style=\"$css\""
+}
+
+private fun classAttribute(properties: Map<String, String>): String {
+    val value = properties["class"]?.trim().orEmpty().ifBlank { properties["className"]?.trim().orEmpty() }
+    return if (value.isBlank()) "" else " class=\"${escapeHtml(value)}\""
+}
+
+private fun reactClassAttribute(properties: Map<String, String>): String {
+    val value = properties["className"]?.trim().orEmpty().ifBlank { properties["class"]?.trim().orEmpty() }
+    return if (value.isBlank()) "" else " className=\"${escapeHtml(value)}\""
+}
+
+private fun isNativeElementAttribute(key: String): Boolean = when (key) {
+    "src", "href", "class", "className", "alt", "placeholder" -> true
+    else -> false
 }
 
 private fun escapeHtml(value: String): String = value
@@ -186,6 +252,19 @@ private fun sanitizeJsonLd(value: String): String? = runCatching {
     normalized.replace("</script>", "<\\/script>")
 }.getOrNull()
 
+private fun defaultCspValue(): String = listOf(
+    "default-src 'self'",
+    "img-src 'self' data: https:",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com data:",
+    "script-src 'self'",
+    "connect-src 'self' https:",
+    "base-uri 'self'",
+    "object-src 'none'",
+    "frame-ancestors 'none'",
+    "upgrade-insecure-requests",
+).joinToString("; ")
+
 private fun toReactStyleKey(cssKey: String): String {
     val segments = cssKey.split("-").filter { it.isNotBlank() }
     if (segments.isEmpty()) return cssKey
@@ -196,3 +275,9 @@ private fun toReactStyleKey(cssKey: String): String {
         }
     }
 }
+
+private fun slugify(value: String): String = value
+    .lowercase()
+    .replace(Regex("[^a-z0-9]+"), "-")
+    .trim('-')
+    .ifBlank { "webforge-project" }

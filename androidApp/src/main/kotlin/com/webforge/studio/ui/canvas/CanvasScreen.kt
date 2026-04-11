@@ -30,10 +30,13 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -45,6 +48,7 @@ import com.webforge.studio.ui.component.WFEmptyState
 import com.webforge.studio.ui.properties.PropertiesPanel
 import com.webforge.studio.ui.theme.Dimens
 import android.webkit.WebView
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -56,8 +60,8 @@ fun CanvasScreen(
     viewModel: CanvasViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    var showCodeDialog by remember { mutableStateOf(false) }
-    var codePreviewMode by remember { mutableStateOf(false) }
+    var showCodeDialog by rememberSaveable { mutableStateOf(false) }
+    var codePreviewMode by rememberSaveable { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -284,6 +288,16 @@ fun CanvasScreen(
                 if (showCodeDialog) {
                     val code = state.generatedCode?.files?.entries?.firstOrNull()
                     val html = state.generatedCode?.files?.get("index.html")
+                    var debouncedHtml by remember { mutableStateOf(html) }
+                    var previewWebView by remember { mutableStateOf<WebView?>(null) }
+                    LaunchedEffect(html, codePreviewMode) {
+                        if (codePreviewMode) {
+                            delay(500)
+                            debouncedHtml = html
+                        } else {
+                            debouncedHtml = html
+                        }
+                    }
                     AlertDialog(
                         onDismissRequest = { showCodeDialog = false },
                         title = { Text(stringResource(R.string.canvas_code_dialog_title)) },
@@ -297,7 +311,7 @@ fun CanvasScreen(
                                     TextButton(onClick = { codePreviewMode = true }) { Text("Preview") }
                                 }
                                 code?.let { (fileName, content) ->
-                                    if (!codePreviewMode || html.isNullOrBlank()) {
+                                    if (!codePreviewMode || debouncedHtml.isNullOrBlank()) {
                                         Text(
                                             text = fileName,
                                             style = MaterialTheme.typography.labelMedium,
@@ -309,17 +323,32 @@ fun CanvasScreen(
                                             modifier = Modifier.fillMaxWidth(),
                                         )
                                     } else {
+                                        DisposableEffect(Unit) {
+                                            onDispose {
+                                                previewWebView?.apply {
+                                                    stopLoading()
+                                                    loadUrl("about:blank")
+                                                    removeAllViews()
+                                                    destroy()
+                                                }
+                                                previewWebView = null
+                                            }
+                                        }
                                         AndroidView(
                                             factory = { context ->
                                                 WebView(context).apply {
                                                     // Prevent execution of generated/user-provided scripts in preview mode.
                                                     settings.javaScriptEnabled = false
+                                                    settings.allowFileAccess = false
+                                                    settings.allowContentAccess = false
+                                                    settings.domStorageEnabled = false
+                                                    previewWebView = this
                                                 }
                                             },
                                             update = { webView ->
                                                 webView.loadDataWithBaseURL(
                                                     null,
-                                                    html,
+                                                    debouncedHtml.orEmpty(),
                                                     "text/html",
                                                     "utf-8",
                                                     null,

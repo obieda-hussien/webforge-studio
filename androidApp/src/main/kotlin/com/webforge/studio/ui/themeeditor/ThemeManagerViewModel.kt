@@ -48,12 +48,36 @@ class ThemeManagerViewModel @Inject constructor(
     }
 
     fun onSeedChange(hex: String) {
-        updateConfig { it.copy(primaryColor = normalizeHex(hex), colorSeed = parseSeed(hex)) }
+        val primary = normalizeHex(hex)
+        val secondary = shiftColor(primary, 0.75f)
+        val background = shiftColor(primary, 1.9f)
+        updateConfig {
+            it.copy(
+                primaryColor = primary,
+                secondaryColor = secondary,
+                backgroundColor = background,
+                colorSeed = parseSeed(primary),
+                customColors = it.customColors + mapOf(
+                    "primary" to primary,
+                    "secondary" to secondary,
+                    "background" to background,
+                ),
+            )
+        }
     }
 
     fun onRoleColorChange(role: String, hex: String) {
+        val normalized = normalizeHex(hex)
         updateConfig {
-            it.copy(customColors = it.customColors.toMutableMap().apply { put(role, normalizeHex(hex)) })
+            val updatedConfig = when (role) {
+                "primary" -> it.copy(primaryColor = normalized)
+                "secondary" -> it.copy(secondaryColor = normalized)
+                "background" -> it.copy(backgroundColor = normalized)
+                else -> it
+            }
+            updatedConfig.copy(
+                customColors = updatedConfig.customColors.toMutableMap().apply { put(role, normalized) },
+            )
         }
     }
 
@@ -166,5 +190,14 @@ class ThemeManagerViewModel @Inject constructor(
                 val hex = token.trim()
                 if (hex.matches(Regex("^[0-9a-fA-F]{6}$"))) "#${hex.uppercase()}" else null
             }
+    }
+
+    private fun shiftColor(color: String, factor: Float): String {
+        val clean = normalizeHex(color).removePrefix("#")
+        val r = clean.substring(0, 2).toInt(16)
+        val g = clean.substring(2, 4).toInt(16)
+        val b = clean.substring(4, 6).toInt(16)
+        fun shift(channel: Int): Int = ((channel * factor).toInt()).coerceIn(0, 255)
+        return "#%02X%02X%02X".format(shift(r), shift(g), shift(b))
     }
 }
