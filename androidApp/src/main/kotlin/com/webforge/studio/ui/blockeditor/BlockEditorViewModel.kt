@@ -176,20 +176,25 @@ class BlockEditorViewModel @Inject constructor(
             val topLevel = chain.blocks.filter { it.parentBlockId == null }
             if (topLevel.none { it.id in orderLookup }) return@mutateActiveChain chain
 
-            val reorderedTop = topLevel
-                .sortedBy { orderLookup[it.id] ?: Int.MAX_VALUE }
-                .mapIndexed { index, node -> node.copy(order = index) }
-            val reorderedTopById = reorderedTop.associateBy { it.id }
+            val reorderedTop = topLevel.sortedBy { orderLookup[it.id] ?: Int.MAX_VALUE }
+            val reorderedTopIds = reorderedTop.map { it.id }.toSet()
+            val childrenByParent = chain.blocks
+                .filter { it.parentBlockId != null }
+                .groupBy { it.parentBlockId }
+                .mapValues { (_, children) -> children.sortedBy { it.order } }
 
-            val merged = chain.blocks
-                .map { node -> reorderedTopById[node.id] ?: node }
-                .sortedWith(
-                    compareBy<BlockNode> { it.parentBlockId != null }
-                        .thenBy { it.order },
-                )
-                .mapIndexed { index, node -> node.copy(order = index) }
+            val orderedBlocks = buildList {
+                reorderedTop.forEach { parent ->
+                    add(parent)
+                    addAll(childrenByParent[parent.id].orEmpty())
+                }
+                chain.blocks
+                    .filter { it.parentBlockId != null && it.parentBlockId !in reorderedTopIds }
+                    .sortedBy { it.order }
+                    .forEach { add(it) }
+            }.mapIndexed { index, node -> node.copy(order = index) }
 
-            chain.copy(blocks = merged)
+            chain.copy(blocks = orderedBlocks)
         }
     }
 

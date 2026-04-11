@@ -83,6 +83,7 @@ import com.webforge.studio.ui.component.WFTextField
 import com.webforge.studio.ui.theme.WFMotion
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -353,6 +354,7 @@ private fun BlockChainCanvas(
     val coroutineScope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     val itemHeightsPx = remember { mutableStateMapOf<String, Int>() }
+    var persistReorderJob by remember { mutableStateOf<Job?>(null) }
 
     LaunchedEffect(topBlocks.map { it.id to it.order }) {
         if (dragAndDropState.draggingBlockId == null) {
@@ -381,9 +383,9 @@ private fun BlockChainCanvas(
                     val centers = mutableListOf<Float>()
                     var yCursor = 0f
                     visibleBlocks.forEach { block ->
-                        val itemHeight = (itemHeightsPx[block.id] ?: 120).toFloat()
+                        val itemHeight = (itemHeightsPx[block.id] ?: DEFAULT_BLOCK_CARD_HEIGHT_PX).toFloat()
                         centers += yCursor + (itemHeight / 2f)
-                        yCursor += itemHeight + 10f
+                        yCursor += itemHeight + BLOCK_CARD_SPACING_PX
                     }
                     centers.zipWithNext()
                 }
@@ -437,8 +439,9 @@ private fun BlockChainCanvas(
                                             next.removeAt(from)
                                             next.add(to, node.id)
                                             orderedTopBlockIds = next
-                                            coroutineScope.launch {
-                                                delay(220)
+                                            persistReorderJob?.cancel()
+                                            persistReorderJob = coroutineScope.launch {
+                                                delay(REORDER_ANIMATION_DEBOUNCE_MS)
                                                 onReorderBlocks(next)
                                             }
                                         }
@@ -446,7 +449,7 @@ private fun BlockChainCanvas(
                                     },
                                     onDragCancel = { dragAndDropState.clear() },
                                 ) { _, dragAmount ->
-                                    val itemHeight = itemHeightsPx[node.id]?.toFloat() ?: 100f
+                                    val itemHeight = itemHeightsPx[node.id]?.toFloat() ?: DEFAULT_BLOCK_CARD_HEIGHT_PX.toFloat()
                                     dragAndDropState.updateDrag(
                                         dragDeltaY = dragAmount.y,
                                         itemHeightPx = itemHeight,
@@ -704,6 +707,10 @@ private fun VariableManagerPanel(
         }
     }
 }
+
+private const val REORDER_ANIMATION_DEBOUNCE_MS = 220L
+private const val DEFAULT_BLOCK_CARD_HEIGHT_PX = 120
+private const val BLOCK_CARD_SPACING_PX = 10f
 
 private fun categoryColor(token: BlockColorToken): Color = when (token) {
     BlockColorToken.RED -> Color(0xFFE53935)

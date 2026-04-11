@@ -151,12 +151,10 @@ class BlockJavaScriptGenerator {
         val trimmed = raw.trim()
         if (trimmed.isBlank()) return "undefined"
         if (!expressionRegex.matches(trimmed)) return "undefined"
-        var expression = trimmed
-        variableMapping.forEach { (requested, unique) ->
-            val token = Regex("\\b${Regex.escape(requested)}\\b")
-            expression = expression.replace(token, unique)
+        if (identifierRegex.findAll(trimmed).any { it.value in forbiddenIdentifiers }) return "undefined"
+        return identifierRegex.replace(trimmed) { match ->
+            variableMapping[match.value] ?: match.value
         }
-        return expression
     }
 
     private fun safeJsonLiteral(raw: String): String {
@@ -221,7 +219,20 @@ class BlockJavaScriptGenerator {
 
     private companion object {
         val placeholderRegex = Regex("\\$\\{[^}]+}")
-        val expressionRegex = Regex("[a-zA-Z0-9_$.\\s+\\-*/%<>=!&|?:(),\\[\\]'\"`]+")
+        val expressionRegex = Regex("[a-zA-Z0-9_\\s+\\-*/%<>=!&|?:(),.]+")
+        val identifierRegex = Regex("\\b[a-zA-Z_][a-zA-Z0-9_]*\\b")
+        val forbiddenIdentifiers = setOf(
+            "window",
+            "document",
+            "globalThis",
+            "eval",
+            "Function",
+            "constructor",
+            "__proto__",
+            "prototype",
+            "import",
+            "require",
+        )
         val fetchBlocks = setOf(
             BlockType.FETCH_GET,
             BlockType.FETCH_POST,
