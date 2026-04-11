@@ -149,8 +149,14 @@ class ThemeManagerViewModel @Inject constructor(
     }.getOrDefault(0x6750A4)
 
     private fun normalizeHex(value: String): String {
-        val cleaned = value.trim().removePrefix("#").take(6).padEnd(6, '0')
-        return "#${cleaned.uppercase()}"
+        val cleaned = value.trim().removePrefix("#")
+        val normalized = when {
+            cleaned.length == 3 && cleaned.all { it.isLetterOrDigit() } ->
+                cleaned.map { "$it$it" }.joinToString("")
+            cleaned.length >= 6 -> cleaned.take(6)
+            else -> cleaned.padEnd(6, '0')
+        }
+        return "#${normalized.uppercase()}"
     }
 
     private fun parseCoolorsPalette(url: String): List<String> {

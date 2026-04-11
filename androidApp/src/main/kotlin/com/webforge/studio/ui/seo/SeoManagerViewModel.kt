@@ -96,8 +96,16 @@ class SeoManagerViewModel @Inject constructor(
 
     private fun recalculate() {
         val seo = _uiState.value.seo
-        val titleScore = if (seo.title.length in 50..60) 20 else 10
-        val descScore = if (seo.metaDescription.length in 150..160) 20 else 10
+        val titleScore = when (seo.title.length) {
+            in 50..60 -> 20
+            in 30..70 -> 10
+            else -> 0
+        }
+        val descScore = when (seo.metaDescription.length) {
+            in 150..160 -> 20
+            in 100..200 -> 10
+            else -> 0
+        }
         val keywordScore = if (seo.metaKeywords.isNotEmpty()) 10 else 0
         val canonicalScore = if (seo.canonicalUrl.isNotBlank()) 10 else 0
         val ogScore = if (seo.ogTitle.isNotBlank() && seo.ogDescription.isNotBlank() && seo.ogImage.isNotBlank()) 20 else 0

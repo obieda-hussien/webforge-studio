@@ -6,6 +6,7 @@ import com.webforge.studio.model.Page
 import com.webforge.studio.model.ProjectModel
 import com.webforge.studio.model.SEOConfig
 import com.webforge.studio.model.TargetPlatform
+import kotlinx.serialization.json.Json
 
 interface CodeGenerator {
     fun generate(project: ProjectModel, rootElement: ElementNode, page: Page? = null): GeneratedCode
@@ -74,7 +75,6 @@ class ReactCodeGenerator : CodeGenerator {
             appendLine("  <meta charset=\"UTF-8\" />")
             appendLine("  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />")
             append(renderSeoTags(seo, project.name, indent = "  "))
-            appendLine("  <title>${escapeHtml(seo.title.ifBlank { project.name })}</title>")
             appendLine("</head>")
             appendLine("<body>")
             appendLine("  <div id=\"root\"></div>")
@@ -111,9 +111,10 @@ private fun renderSeoTags(seo: SEOConfig, fallbackTitle: String, indent: String)
     if (seo.twitterDescription.isNotBlank()) appendLine("$indent<meta name=\"twitter:description\" content=\"${escapeHtml(seo.twitterDescription)}\" />")
     if (seo.twitterImage.isNotBlank()) appendLine("$indent<meta name=\"twitter:image\" content=\"${escapeHtml(seo.twitterImage)}\" />")
     appendLine("$indent<meta name=\"twitter:card\" content=\"${seo.twitterCard.value}\" />")
-    if (seo.structuredDataJson.isNotBlank()) {
+    val safeJsonLd = sanitizeJsonLd(seo.structuredDataJson)
+    if (!safeJsonLd.isNullOrBlank()) {
         appendLine("$indent<script type=\"application/ld+json\">")
-        appendLine(seo.structuredDataJson.trim())
+        appendLine(safeJsonLd)
         appendLine("$indent</script>")
     }
 }
@@ -140,7 +141,9 @@ private fun renderHtmlElement(node: ElementNode, indentLevel: Int): String {
 
 private fun renderReactElement(node: ElementNode, indentLevel: Int): String {
     val indent = "  ".repeat(indentLevel)
-    val style = node.properties.entries.joinToString(", ") { "\"${it.key}\": \"${it.value}\"" }
+    val style = node.properties.entries.joinToString(", ") {
+        "\"${toReactStyleKey(it.key)}\": \"${escapeJsString(it.value)}\""
+    }
     val styleAttr = if (style.isBlank()) "" else " style={{ $style }}"
     return buildString {
         when (node.type) {
@@ -170,3 +173,26 @@ private fun escapeHtml(value: String): String = value
     .replace("<", "&lt;")
     .replace(">", "&gt;")
     .replace("\"", "&quot;")
+
+private fun escapeJsString(value: String): String = value
+    .replace("\\", "\\\\")
+    .replace("\"", "\\\"")
+    .replace("\n", "\\n")
+    .replace("\r", "\\r")
+
+private fun sanitizeJsonLd(value: String): String? = runCatching {
+    val normalized = value.trim()
+    Json.parseToJsonElement(normalized)
+    normalized.replace("</script>", "<\\/script>")
+}.getOrNull()
+
+private fun toReactStyleKey(cssKey: String): String {
+    val segments = cssKey.split("-").filter { it.isNotBlank() }
+    if (segments.isEmpty()) return cssKey
+    return buildString {
+        append(segments.first())
+        segments.drop(1).forEach { part ->
+            append(part.replaceFirstChar { it.uppercase() })
+        }
+    }
+}

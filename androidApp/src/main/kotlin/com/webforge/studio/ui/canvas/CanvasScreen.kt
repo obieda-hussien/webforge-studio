@@ -312,7 +312,8 @@ fun CanvasScreen(
                                         AndroidView(
                                             factory = { context ->
                                                 WebView(context).apply {
-                                                    settings.javaScriptEnabled = true
+                                                    // Prevent execution of generated/user-provided scripts in preview mode.
+                                                    settings.javaScriptEnabled = false
                                                 }
                                             },
                                             update = { webView ->
