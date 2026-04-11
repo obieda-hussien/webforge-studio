@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App -->
+    <string name="app_name">WebForge Studio</string>
+
+    <!-- Navigation -->
+    <string name="navigate_back">Navigate back</string>
+
+    <!-- Home screen -->
+    <string name="home_fab_new_project">New project</string>
+    <string name="home_empty_title">No projects yet</string>
+    <string name="home_empty_hint">Tap + to create your first project</string>
+    <string name="home_delete_project">Delete project</string>
+    <string name="home_search_hint">Search projects…</string>
+    <string name="home_project_menu">Project options</string>
+    <string name="home_menu_open">Open</string>
+    <string name="home_menu_delete">Delete</string>
+
+    <!-- New-project wizard -->
+    <string name="new_project_title">New Project</string>
+    <string name="new_project_step1_title">Name your project</string>
+    <string name="new_project_step2_title">Choose output format</string>
+    <string name="new_project_step3_title">Pick a visual theme</string>
+    <string name="new_project_name_label">Project name *</string>
+    <string name="new_project_description_label">Description (optional)</string>
+    <string name="new_project_output_type_label">Output type</string>
+    <string name="new_project_create_button">Create project</string>
+    <string name="new_project_name_empty_error">Project name cannot be empty</string>
+    <string name="new_project_slug_preview">Slug: %1$s</string>
+    <string name="new_project_color_label">Brand color</string>
+    <string name="new_project_font_label">Font pairing</string>
+    <string name="new_project_dark_mode_label">Dark mode by default</string>
+
+    <!-- Wizard navigation -->
+    <string name="wizard_next">Next</string>
+    <string name="wizard_back">Back</string>
+
+    <!-- Canvas screen -->
+    <string name="canvas_title">Canvas</string>
+    <string name="canvas_generate_code">Generate code</string>
+    <string name="canvas_add_element">Add element</string>
+    <string name="canvas_delete_element">Delete element</string>
+    <string name="canvas_project_not_found">Project not found</string>
+    <string name="canvas_code_dialog_title">Generated Code</string>
+    <string name="canvas_code_dialog_empty">No code generated yet.</string>
+    <string name="canvas_undo">Undo</string>
+    <string name="canvas_redo">Redo</string>
+    <string name="canvas_toggle_palette">Toggle element palette</string>
+    <string name="canvas_toggle_properties">Toggle properties panel</string>
+    <string name="canvas_add_page">Add page</string>
+    <string name="canvas_palette_add">Add %1$s to canvas</string>
+
+    <!-- Properties panel -->
+    <string name="properties_panel_title">Properties</string>
+    <string name="properties_section_info">Element Info</string>
+    <string name="properties_section_layout">Layout</string>
+    <string name="properties_section_typography">Typography</string>
+    <string name="properties_section_appearance">Appearance</string>
+    <string name="properties_section_custom">Custom Attributes</string>
+    <string name="properties_styles_label">Styles</string>
+    <string name="properties_label_field">Label</string>
+    <string name="properties_css_property_key">Property</string>
+    <string name="properties_css_property_value">Value</string>
+    <string name="properties_remove_property">Remove property</string>
+    <string name="properties_add_property">Add property</string>
+    <string name="properties_id_label">ID: %1$s…</string>
+
+    <!-- Generic -->
+    <string name="dialog_close">Close</string>
+    <string name="dialog_cancel">Cancel</string>
+    <string name="dialog_confirm">Confirm</string>
+    <string name="section_expand">Expand section</string>
+    <string name="section_collapse">Collapse section</string>
+</resources>

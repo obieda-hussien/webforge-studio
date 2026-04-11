@@ -1,0 +1,125 @@
+package com.webforge.studio.ui.properties
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import com.webforge.studio.R
+import com.webforge.studio.ui.theme.Dimens
+
+/**
+ * Editable text field for the element's display label.
+ */
+@Composable
+fun LabelEditor(
+    label: String,
+    onLabelChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    OutlinedTextField(
+        value = label,
+        onValueChange = onLabelChange,
+        label = { Text(stringResource(R.string.properties_label_field)) },
+        singleLine = true,
+        modifier = modifier.fillMaxWidth(),
+    )
+}
+
+/**
+ * Dynamic key-value editor for CSS-like style properties.
+ *
+ * The user can add, edit, and remove individual property entries.
+ * Changes are propagated via [onPropertiesChange] after each edit.
+ */
+@Composable
+fun CssPropertyEditor(
+    properties: Map<String, String>,
+    onPropertiesChange: (Map<String, String>) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    // mutableStateListOf ensures each structural change triggers recomposition.
+    val pairs = remember { mutableStateListOf<Pair<String, String>>() }
+
+    // Sync pairs with the incoming properties whenever the external map changes.
+    LaunchedEffect(properties) {
+        pairs.clear()
+        pairs.addAll(properties.entries.map { it.key to it.value })
+    }
+
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(Dimens.SpaceSm)) {
+        pairs.forEachIndexed { index, (key, value) ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(Dimens.SpaceXs),
+            ) {
+                OutlinedTextField(
+                    value = key,
+                    onValueChange = { newKey ->
+                        pairs[index] = newKey to value
+                        onPropertiesChange(pairs.toMap())
+                    },
+                    label = { Text(stringResource(R.string.properties_css_property_key)) },
+                    singleLine = true,
+                    modifier = Modifier.weight(1f),
+                    textStyle = MaterialTheme.typography.bodySmall,
+                )
+                OutlinedTextField(
+                    value = value,
+                    onValueChange = { newValue ->
+                        pairs[index] = key to newValue
+                        onPropertiesChange(pairs.toMap())
+                    },
+                    label = { Text(stringResource(R.string.properties_css_property_value)) },
+                    singleLine = true,
+                    modifier = Modifier.weight(1f),
+                    textStyle = MaterialTheme.typography.bodySmall,
+                )
+                IconButton(
+                    onClick = {
+                        pairs.removeAt(index)
+                        onPropertiesChange(pairs.toMap())
+                    },
+                ) {
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = stringResource(R.string.properties_remove_property),
+                        tint = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
+        }
+
+        TextButton(
+            onClick = {
+                pairs.add("" to "")
+                onPropertiesChange(pairs.toMap())
+            },
+            modifier = Modifier.padding(top = Dimens.SpaceXs),
+        ) {
+            Icon(Icons.Default.Add, contentDescription = null)
+            Text(
+                text = stringResource(R.string.properties_add_property),
+                modifier = Modifier.padding(start = Dimens.SpaceXs),
+            )
+        }
+    }
+}
+
+private fun List<Pair<String, String>>.toMap(): Map<String, String> =
+    associate { (k, v) -> k to v }

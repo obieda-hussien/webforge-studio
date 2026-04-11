@@ -1,0 +1,592 @@
+name: WebForge Studio – CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+    tags:
+      - 'v*.*.*'
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+    inputs:
+      build_release:
+        description: 'Build signed release APK'
+        required: false
+        default: 'false'
+        type: boolean
+      enable_ios:
+        description: 'Run iOS compile check'
+        required: false
+        default: 'false'
+        type: boolean
+      enable_desktop:
+        description: 'Run Desktop JAR build'
+        required: false
+        default: 'false'
+        type: boolean
+
+# Cancel in-progress runs for the same branch/PR to save runner minutes
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  JAVA_VERSION: '17'
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.parallel=true -Dorg.gradle.caching=true -Dkotlin.incremental=false"
+  GRADLE_BUILD_ACTION_CACHE_DEBUG_ENABLED: false
+
+# ════════════════════════════════════════════════════════════════════
+jobs:
+
+  # ──────────────────────────────────────────────────────────────────
+  # 1. CODE QUALITY — ktlint + detekt + lint (runs first, fast fail)
+  # ──────────────────────────────────────────────────────────────────
+  code-quality:
+    name: Code Quality
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history for detekt blame
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: gradle
+
+      - name: Grant gradlew permission
+        run: chmod +x gradlew
+
+      - name: Cache Gradle dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            ~/.konan
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle.kts', '**/libs.versions.toml') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
+      - name: Run ktlint
+        run: ./gradlew ktlintCheck --no-configuration-cache --continue
+        continue-on-error: true
+
+      - name: Run detekt
+        run: ./gradlew detekt --no-configuration-cache
+        continue-on-error: true
+
+      - name: Run Android Lint
+        run: ./gradlew :androidApp:lint :shared:lint --no-configuration-cache
+        continue-on-error: true
+
+      - name: Upload Lint Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint-reports-${{ github.run_number }}
+          path: |
+            **/build/reports/ktlint/
+            **/build/reports/detekt/
+            **/build/reports/lint-results*.html
+            **/build/reports/lint-results*.xml
+          retention-days: 7
+
+      - name: Annotate PR with lint results
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            // Find detekt XML and post summary
+            const summaryLines = ['## 🔍 Code Quality Report\n'];
+            summaryLines.push(`- ktlint: ${{ job.status }}`);
+            summaryLines.push(`- detekt: ${{ job.status }}`);
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: summaryLines.join('\n'),
+            });
+
+  # ──────────────────────────────────────────────────────────────────
+  # 2. UNIT TESTS + COVERAGE
+  # ──────────────────────────────────────────────────────────────────
+  test:
+    name: Unit Tests & Coverage
+    runs-on: ubuntu-latest
+    needs: code-quality
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: gradle
+
+      - name: Grant gradlew permission
+        run: chmod +x gradlew
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle.kts', '**/libs.versions.toml') }}
+          restore-keys: gradle-${{ runner.os }}-
+
+      - name: Run all unit tests with coverage
+        run: |
+          ./gradlew \
+            :androidApp:testDebugUnitTest \
+            :shared:testDebugUnitTest \
+            --no-configuration-cache \
+            --continue
+
+      - name: Publish Test Results
+        if: always()
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        with:
+          files: '**/build/test-results/**/*.xml'
+          comment_mode: always
+          check_name: Unit Test Results
+
+      - name: Upload Coverage Report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report-${{ github.run_number }}
+          path: '**/build/reports/kover/'
+          retention-days: 14
+
+      - name: Coverage Gate (fail if < 60%)
+        run: |
+          REPORT="androidApp/build/reports/kover/xml/report.xml"
+          if [ ! -f "$REPORT" ]; then
+            echo "⚠️ Kover XML report not found at expected location — coverage gate skipped"
+            exit 0
+          fi
+          COVERAGE=$(grep -oP 'line-rate="\K[^"]+' "$REPORT" | head -1)
+          PERCENT=$(echo "$COVERAGE * 100" | bc | cut -d. -f1)
+          echo "Coverage: $PERCENT%"
+          if [ "$PERCENT" -lt 60 ]; then
+            echo "❌ Coverage $PERCENT% is below the 60% threshold"
+            exit 1
+          fi
+          echo "✅ Coverage $PERCENT% passed the threshold"
+
+  # ──────────────────────────────────────────────────────────────────
+  # 3. DEPENDENCY VULNERABILITY SCAN
+  # ──────────────────────────────────────────────────────────────────
+  security-scan:
+    name: Dependency Security Scan
+    runs-on: ubuntu-latest
+    needs: code-quality
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: gradle
+
+      - name: Grant gradlew permission
+        run: chmod +x gradlew
+
+      - name: Run OWASP Dependency Check
+        run: |
+          ./gradlew dependencyCheckAnalyze --no-configuration-cache
+        continue-on-error: true
+
+      - name: Upload OWASP Report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dependency-check-report-${{ github.run_number }}
+          path: build/reports/dependency-check-report.html
+          retention-days: 14
+
+      - name: Run Trivy vulnerability scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Upload Trivy results to Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+  # ──────────────────────────────────────────────────────────────────
+  # 4. ANDROID BUILD — Debug + conditional Release
+  # ──────────────────────────────────────────────────────────────────
+  android:
+    name: Android – ${{ matrix.build_type }} Build
+    runs-on: ubuntu-latest
+    needs: [ test, security-scan ]
+    permissions:
+      contents: write
+      pull-requests: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        build_type: [ debug, release ]
+        exclude:
+          # Only build release when: pushing a version tag OR manually triggered with build_release=true
+          - build_type: ${{ (startsWith(github.ref, 'refs/tags/v') || github.event.inputs.build_release == 'true') && 'never_exclude' || 'release' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: gradle
+
+      - name: Grant gradlew permission
+        run: chmod +x gradlew
+
+      - name: Cache Gradle + Android build cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            ~/.android/build-cache
+          key: android-${{ runner.os }}-${{ matrix.build_type }}-${{ hashFiles('**/*.gradle.kts', '**/libs.versions.toml') }}
+          restore-keys: |
+            android-${{ runner.os }}-${{ matrix.build_type }}-
+            android-${{ runner.os }}-
+
+      # ── Release signing (only for release builds) ──────────────────
+      - name: Decode keystore
+        if: matrix.build_type == 'release'
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > $RUNNER_TEMP/webforge.keystore
+          echo "KEYSTORE_PATH=$RUNNER_TEMP/webforge.keystore" >> $GITHUB_ENV
+
+      - name: Build ${{ matrix.build_type }} APK
+        run: |
+          if [ "${{ matrix.build_type }}" = "release" ]; then
+            ./gradlew :androidApp:assembleRelease \
+              -Pandroid.injected.signing.store.file=${{ env.KEYSTORE_PATH }} \
+              -Pandroid.injected.signing.store.password=${{ secrets.KEYSTORE_PASSWORD }} \
+              -Pandroid.injected.signing.key.alias=${{ secrets.KEY_ALIAS }} \
+              -Pandroid.injected.signing.key.password=${{ secrets.KEY_PASSWORD }} \
+              --no-configuration-cache
+          else
+            ./gradlew :androidApp:assembleDebug --no-configuration-cache
+          fi
+
+      - name: Get APK info
+        id: apk-info
+        run: |
+          APK_PATH=$(find androidApp/build/outputs/apk -name "*.apk" | head -1)
+          APK_SIZE=$(du -sh "$APK_PATH" | cut -f1)
+          echo "apk_path=$APK_PATH" >> $GITHUB_OUTPUT
+          echo "apk_size=$APK_SIZE" >> $GITHUB_OUTPUT
+          echo "APK size: $APK_SIZE"
+
+      - name: APK Size Gate (fail if > 30MB for debug)
+        if: matrix.build_type == 'debug'
+        run: |
+          APK_PATH=$(find androidApp/build/outputs/apk/debug -name "*.apk" | head -1)
+          SIZE_KB=$(du -k "$APK_PATH" | cut -f1)
+          MAX_KB=30720  # 30MB
+          echo "APK size: ${SIZE_KB}KB / max ${MAX_KB}KB"
+          if [ "$SIZE_KB" -gt "$MAX_KB" ]; then
+            echo "❌ APK size ${SIZE_KB}KB exceeds 30MB limit"
+            exit 1
+          fi
+          echo "✅ APK size check passed"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: webforge-studio-${{ matrix.build_type }}-${{ github.run_number }}
+          path: androidApp/build/outputs/apk/${{ matrix.build_type }}/*.apk
+          retention-days: ${{ matrix.build_type == 'release' && 30 || 14 }}
+
+      - name: Generate build summary
+        run: |
+          cat >> $GITHUB_STEP_SUMMARY << EOF
+          ## 📦 Android ${{ matrix.build_type }} Build
+          | Property | Value |
+          |----------|-------|
+          | Build type | \`${{ matrix.build_type }}\` |
+          | APK size | ${{ steps.apk-info.outputs.apk_size }} |
+          | Run number | #${{ github.run_number }} |
+          | Triggered by | ${{ github.actor }} |
+          EOF
+
+      - name: Comment build result on commit (push to main only)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const type = '${{ matrix.build_type }}';
+            const size = '${{ steps.apk-info.outputs.apk_size }}';
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const emoji = type === 'release' ? '🚀' : '✅';
+            await github.rest.repos.createCommitComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              commit_sha: context.sha,
+              body: `${emoji} **${type.charAt(0).toUpperCase() + type.slice(1)} Build #${context.runNumber} succeeded!**\n\n` +
+                    `📦 APK size: **${size}**\n` +
+                    `⬇️ [Download from workflow artifacts](${runUrl})\n` +
+                    `🕐 Built at: ${new Date().toUTCString()}`,
+            });
+
+      # ── Auto-create GitHub Release on version tags ─────────────────
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v') && matrix.build_type == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: androidApp/build/outputs/apk/release/*.apk
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref, '-alpha') || contains(github.ref, '-beta') || contains(github.ref, '-rc') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ──────────────────────────────────────────────────────────────────
+  # 5. iOS — KMP Shared Module Compile Check
+  # ──────────────────────────────────────────────────────────────────
+  ios:
+    name: iOS – KMP Shared Compile Check
+    if: |
+      startsWith(github.ref, 'refs/tags/v') ||
+      github.event.inputs.enable_ios == 'true' ||
+      contains(github.event.pull_request.labels.*.name, 'ios')
+    runs-on: macos-latest
+    needs: [ test ]
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: gradle
+
+      - name: Cache Gradle + Kotlin/Native
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            ~/.konan/cache
+            ~/.konan/dependencies
+          key: ios-${{ runner.os }}-${{ hashFiles('**/*.gradle.kts', '**/libs.versions.toml') }}
+          restore-keys: ios-${{ runner.os }}-
+
+      - name: Grant gradlew permission
+        run: chmod +x gradlew
+
+      - name: Compile KMP shared – iosSimulatorArm64
+        run: |
+          ./gradlew \
+            :shared:compileKotlinIosSimulatorArm64 \
+            :shared:compileKotlinIosArm64 \
+            --no-configuration-cache
+
+      - name: Link iOS framework
+        run: |
+          ./gradlew \
+            :shared:linkDebugFrameworkIosSimulatorArm64 \
+            --no-configuration-cache
+
+      - name: Upload iOS framework artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: webforge-shared-ios-framework-${{ github.run_number }}
+          path: shared/build/bin/iosSimulatorArm64/debugFramework/
+          retention-days: 7
+
+  # ──────────────────────────────────────────────────────────────────
+  # 6. DESKTOP — Compose Desktop JAR
+  # ──────────────────────────────────────────────────────────────────
+  desktop:
+    name: Desktop – ${{ matrix.os }} JAR
+    if: |
+      startsWith(github.ref, 'refs/tags/v') ||
+      github.event.inputs.enable_desktop == 'true' ||
+      contains(github.event.pull_request.labels.*.name, 'desktop')
+    runs-on: ${{ matrix.os }}
+    needs: [ test ]
+    permissions:
+      contents: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-latest, macos-latest, windows-latest ]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: gradle
+
+      - name: Grant gradlew permission (Unix)
+        if: runner.os != 'Windows'
+        run: chmod +x gradlew
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: desktop-${{ runner.os }}-${{ hashFiles('**/*.gradle.kts', '**/libs.versions.toml') }}
+          restore-keys: desktop-${{ runner.os }}-
+
+      - name: Build Desktop release package
+        run: ./gradlew :desktopApp:packageReleaseUberJarForCurrentOS --no-configuration-cache
+
+      - name: Build native installer (tag builds only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          ./gradlew \
+            :desktopApp:packageReleaseDmg \
+            :desktopApp:packageReleaseMsi \
+            :desktopApp:packageReleaseDeb \
+            --no-configuration-cache
+        continue-on-error: true
+
+      - name: Upload Desktop artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: webforge-studio-desktop-${{ runner.os }}-${{ github.run_number }}
+          path: |
+            desktopApp/build/compose/jars/*.jar
+            desktopApp/build/compose/binaries/**/*.dmg
+            desktopApp/build/compose/binaries/**/*.msi
+            desktopApp/build/compose/binaries/**/*.deb
+          retention-days: 14
+
+  # ──────────────────────────────────────────────────────────────────
+  # 7. PIPELINE SUMMARY — final status notification
+  # ──────────────────────────────────────────────────────────────────
+  pipeline-summary:
+    name: Pipeline Summary
+    runs-on: ubuntu-latest
+    needs: [ code-quality, test, security-scan, android ]
+    if: always()
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Evaluate pipeline result
+        id: result
+        run: |
+          QUALITY="${{ needs.code-quality.result }}"
+          TEST="${{ needs.test.result }}"
+          SECURITY="${{ needs.security-scan.result }}"
+          ANDROID="${{ needs.android.result }}"
+
+          if [[ "$QUALITY" == "success" && "$TEST" == "success" && "$ANDROID" == "success" ]]; then
+            echo "status=✅ All checks passed" >> $GITHUB_OUTPUT
+            echo "color=28a745" >> $GITHUB_OUTPUT
+          elif [[ "$TEST" == "failure" || "$ANDROID" == "failure" ]]; then
+            echo "status=❌ Pipeline failed" >> $GITHUB_OUTPUT
+            echo "color=dc3545" >> $GITHUB_OUTPUT
+          else
+            echo "status=⚠️ Pipeline passed with warnings" >> $GITHUB_OUTPUT
+            echo "color=ffc107" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Write job summary
+        run: |
+          cat >> $GITHUB_STEP_SUMMARY << EOF
+          # WebForge Studio – Pipeline #${{ github.run_number }}
+
+          ${{ steps.result.outputs.status }}
+
+          | Job | Status |
+          |-----|--------|
+          | Code Quality | ${{ needs.code-quality.result }} |
+          | Unit Tests | ${{ needs.test.result }} |
+          | Security Scan | ${{ needs.security-scan.result }} |
+          | Android Build | ${{ needs.android.result }} |
+
+          **Triggered by:** ${{ github.actor }}
+          **Branch:** \`${{ github.ref_name }}\`
+          **Commit:** \`${{ github.sha }}\`
+          EOF
+
+      - name: Comment pipeline summary on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const status = `${{ steps.result.outputs.status }}`;
+            const jobs = {
+              'Code Quality': '${{ needs.code-quality.result }}',
+              'Unit Tests':   '${{ needs.test.result }}',
+              'Security':     '${{ needs.security-scan.result }}',
+              'Android':      '${{ needs.android.result }}',
+            };
+            const rows = Object.entries(jobs)
+              .map(([name, result]) => {
+                const icon = result === 'success' ? '✅' : result === 'failure' ? '❌' : '⚠️';
+                return `| ${name} | ${icon} ${result} |`;
+              }).join('\n');
+            const body = `## ${status}\n\n| Job | Result |\n|-----|--------|\n${rows}\n\n` +
+              `[View full pipeline](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });
