@@ -254,7 +254,7 @@ jobs:
           format: 'sarif'
           output: 'trivy-results.sarif'
           severity: 'CRITICAL,HIGH'
-          cache: 'false'
+          cache: false
 
       - name: Upload Trivy results to Security tab
         uses: github/codeql-action/upload-sarif@v4
