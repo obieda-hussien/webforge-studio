@@ -303,7 +303,7 @@ object BlockDescriptors {
         putNav(BlockType.SHOW_CONFIRM, "Show Confirm", "help", listOf(textParam("message", "Message", "Are you sure?", true)), "const ${ '$' }{resultVar} = window.confirm(${ '$' }{message});")
 
         // Utility
-        putUtility(BlockType.CONSOLE_LOG, "Console Log", "terminal", listOf(textParam("message", "Message", "value", true)), "console.log(${ '$' }{message});")
+        putUtility(BlockType.CONSOLE_LOG, "Console Log", "terminal", listOf(textParam("message", "Message", "value", true)), false, "console.log(${ '$' }{message});")
         putUtility(BlockType.SET_TIMEOUT, "Set Timeout", "timer", listOf(numParam("delay", "Delay (ms)", "300", true)), true, "setTimeout(() => {\n${'$'}{body}\n}, ${ '$' }{delay});")
         putUtility(BlockType.SET_INTERVAL, "Set Interval", "timer_10", listOf(numParam("delay", "Delay (ms)", "1000", true)), true, "const ${ '$' }{intervalVar} = setInterval(() => {\n${'$'}{body}\n}, ${ '$' }{delay});")
         putUtility(BlockType.CLEAR_INTERVAL, "Clear Interval", "timer_off", listOf(variableParam("name", "Interval Variable", "intervalId")), false, "clearInterval(${ '$' }{name});")
