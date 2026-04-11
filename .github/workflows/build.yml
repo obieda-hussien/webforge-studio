@@ -55,12 +55,12 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0 # full history for detekt blame
 
       - name: Set up JDK ${{ env.JAVA_VERSION }}
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: ${{ env.JAVA_VERSION }}
@@ -70,7 +70,7 @@ jobs:
         run: chmod +x gradlew
 
       - name: Cache Gradle dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.gradle/caches
@@ -94,7 +94,7 @@ jobs:
 
       - name: Upload Lint Reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: lint-reports-${{ github.run_number }}
           path: |
@@ -106,7 +106,7 @@ jobs:
 
       - name: Annotate PR with lint results
         if: github.event_name == 'pull_request' && always()
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const fs = require('fs');
@@ -136,10 +136,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up JDK ${{ env.JAVA_VERSION }}
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: ${{ env.JAVA_VERSION }}
@@ -149,7 +149,7 @@ jobs:
         run: chmod +x gradlew
 
       - name: Cache Gradle
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.gradle/caches
@@ -166,7 +166,7 @@ jobs:
             --continue
 
       - name: Publish Test Results
-        if: always()
+        if: always() && hashFiles('**/build/test-results/**/*.xml') != ''
         uses: EnricoMi/publish-unit-test-result-action@v2
         with:
           files: '**/build/test-results/**/*.xml'
@@ -174,8 +174,8 @@ jobs:
           check_name: Unit Test Results
 
       - name: Upload Coverage Report
-        uses: actions/upload-artifact@v4
-        if: always()
+        uses: actions/upload-artifact@v5
+        if: always() && hashFiles('**/build/reports/kover/**/*.xml') != ''
         with:
           name: coverage-report-${{ github.run_number }}
           path: '**/build/reports/kover/'
@@ -210,10 +210,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up JDK ${{ env.JAVA_VERSION }}
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: ${{ env.JAVA_VERSION }}
@@ -222,17 +222,28 @@ jobs:
       - name: Grant gradlew permission
         run: chmod +x gradlew
 
+      - name: Check dependencyCheckAnalyze availability
+        id: dependency-check-task
+        run: |
+          if ./gradlew tasks --all --no-configuration-cache | grep -qE '^dependencyCheckAnalyze( |$)'; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "ℹ️ dependencyCheckAnalyze task is not available in this Gradle configuration. Skipping OWASP scan."
+          fi
+
       - name: Run OWASP Dependency Check
+        if: steps.dependency-check-task.outputs.available == 'true'
         run: |
           ./gradlew dependencyCheckAnalyze --no-configuration-cache
         continue-on-error: true
 
       - name: Upload OWASP Report
-        uses: actions/upload-artifact@v4
-        if: always()
+        uses: actions/upload-artifact@v5
+        if: always() && hashFiles('**/build/reports/dependency-check-report.*') != ''
         with:
           name: dependency-check-report-${{ github.run_number }}
-          path: build/reports/dependency-check-report.html
+          path: '**/build/reports/dependency-check-report.*'
           retention-days: 14
 
       - name: Run Trivy vulnerability scan
@@ -245,7 +256,7 @@ jobs:
           severity: 'CRITICAL,HIGH'
 
       - name: Upload Trivy results to Security tab
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: 'trivy-results.sarif'
 
@@ -270,12 +281,12 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
       - name: Set up JDK ${{ env.JAVA_VERSION }}
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: ${{ env.JAVA_VERSION }}
@@ -285,7 +296,7 @@ jobs:
         run: chmod +x gradlew
 
       - name: Cache Gradle + Android build cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.gradle/caches
@@ -339,7 +350,7 @@ jobs:
           echo "✅ APK size check passed"
 
       - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: webforge-studio-${{ matrix.build_type }}-${{ github.run_number }}
           path: androidApp/build/outputs/apk/${{ matrix.build_type }}/*.apk
@@ -359,7 +370,7 @@ jobs:
 
       - name: Comment build result on commit (push to main only)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const type = '${{ matrix.build_type }}';
@@ -404,17 +415,17 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up JDK ${{ env.JAVA_VERSION }}
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: ${{ env.JAVA_VERSION }}
           cache: gradle
 
       - name: Cache Gradle + Kotlin/Native
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.gradle/caches
@@ -441,7 +452,7 @@ jobs:
             --no-configuration-cache
 
       - name: Upload iOS framework artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: webforge-shared-ios-framework-${{ github.run_number }}
           path: shared/build/bin/iosSimulatorArm64/debugFramework/
@@ -468,10 +479,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up JDK ${{ env.JAVA_VERSION }}
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: ${{ env.JAVA_VERSION }}
@@ -482,7 +493,7 @@ jobs:
         run: chmod +x gradlew
 
       - name: Cache Gradle
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.gradle/caches
@@ -504,7 +515,7 @@ jobs:
         continue-on-error: true
 
       - name: Upload Desktop artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: webforge-studio-desktop-${{ runner.os }}-${{ github.run_number }}
           path: |
@@ -567,7 +578,7 @@ jobs:
 
       - name: Comment pipeline summary on PR
         if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const status = `${{ steps.result.outputs.status }}`;
