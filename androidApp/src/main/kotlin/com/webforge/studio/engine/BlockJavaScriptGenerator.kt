@@ -36,7 +36,7 @@ class BlockJavaScriptGenerator {
             .filter { it.type == BlockType.DECLARE_VARIABLE }
             .mapNotNull { it.parameters["name"]?.content }
             .map { requested ->
-                val unique = uniqueName(requested.ifBlank { "value" }, variableNames)
+                val unique = uniqueName(requested.ifBlank { "unnamedVar" }, variableNames)
                 variableMapping.putIfAbsent(requested, unique)
                 "let $unique;"
             }
@@ -48,7 +48,11 @@ class BlockJavaScriptGenerator {
             variableMapping = variableMapping,
         )
 
-        val targetExpr = if (elementId.isNullOrBlank()) "window" else "document.getElementById('$elementId')"
+        val targetExpr = if (elementId.isNullOrBlank()) {
+            "window"
+        } else {
+            "document.getElementById('${escapeJsString(elementId)}')"
+        }
         val wrapperBody = eventDescriptor.codeTemplate
             .replace("${'$'}{target}", targetExpr)
             .replace("${'$'}{body}", listOf(declarations.joinToString("\n"), bodyCode).filter { it.isNotBlank() }.joinToString("\n"))
@@ -104,5 +108,19 @@ class BlockJavaScriptGenerator {
             i++
         }
         return candidate
+    }
+
+    private fun escapeJsString(value: String): String = buildString {
+        value.forEach { ch ->
+            when (ch) {
+                '\\' -> append("\\\\")
+                '\'' -> append("\\'")
+                '\"' -> append("\\\"")
+                '\n' -> append("\\n")
+                '\r' -> append("\\r")
+                '\t' -> append("\\t")
+                else -> append(ch)
+            }
+        }
     }
 }

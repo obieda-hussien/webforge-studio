@@ -225,7 +225,13 @@ class BlockEditorViewModel @Inject constructor(
     fun onRenameVariable(oldName: String, newName: String) {
         val clean = newName.trim()
         if (clean.isBlank()) return
-        val variableKeys = setOf("name", "variable", "variableName", "varName", "intervalVar")
+        val variableKeys = BlockDescriptors.all.values
+            .flatMap { descriptor ->
+                descriptor.parameters
+                    .filter { it.acceptsVariableReference }
+                    .map { it.name }
+            }
+            .toSet() + "name"
         mutateActiveChain { chain ->
             chain.copy(
                 blocks = chain.blocks.map { block ->
