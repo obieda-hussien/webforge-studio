@@ -1,191 +1,151 @@
 # WebForge Studio
 
-**WebForge Studio** is an Android-first visual web builder IDE built with Kotlin, Jetpack Compose, and a shared Kotlin Multiplatform module.
+WebForge Studio is an Android-first visual web builder built with Kotlin, Jetpack Compose, and a shared Kotlin Multiplatform module.
 
-It lets you create web projects, compose UI blocks visually on a canvas, manage pages, and generate starter source code.
-
----
-
-## Overview
-
-WebForge Studio combines:
-- A **project dashboard** (create, browse, search, delete projects)
-- A **3-step project creation wizard**
-- A **visual canvas editor** with draggable elements
-- A **properties panel** for editing element attributes/styles
-- **Undo/redo history**
-- **Page management** (multi-page projects)
-- **Code generation** (currently HTML generator implementation)
+It provides:
+- project management and onboarding
+- visual canvas editing for UI elements
+- page management
+- interaction/block editing with event chains
+- code generation for project export
 
 ---
 
-## Key Features
+## What’s Updated
 
-### 1) Project Management
-- Create projects with:
-  - Name + slug
-  - Description
-  - Target platform (HTML / React / React+TS / PWA)
-  - Theme preferences (color seed, font pair, dark mode)
-- Search projects from home screen
-- Delete existing projects
+Recent updates include:
+- block editor drag/reorder flow moved to UI-owned drag state
+- deferred persistence after reorder animation
+- safer JavaScript block generation (typed parameter handling, scoped variable mapping, fetch try/catch wrapping, placeholder fallback handling)
+- descriptor-driven event lookup (`BlockDescriptors.descriptorForEvent`)
+- motion-token-aligned block editor animations and improved connector rendering
 
-### 2) Visual Canvas
-- Add elements from palette (`CONTAINER`, `TEXT`, `IMAGE`, `BUTTON`, `INPUT`, `LINK`, `DIVIDER`, `CUSTOM`)
-- Select, move, relabel, and delete elements
-- Edit custom style/attribute properties
-- Zoom and pan support
-- Toggle element palette and properties panel visibility
+---
 
-### 3) Editing Productivity
-- Command-based **undo/redo** (history limit: 50 actions)
-- Real-time state updates via `StateFlow` + lifecycle-aware collection
+## Core Features
 
-### 4) Multi-Page Project Support
-- Add/select pages per project
-- Persist and observe pages reactively
+### Project Management
+- create/search/delete projects
+- project metadata + target output settings
+- theme configuration support
 
-### 5) Code Generation
-- `CodeGenerator` abstraction with pluggable backends
-- Current default backend: `HtmlCodeGenerator`
-- Generates output bundle (`GeneratedCode`) as file path → file content map
+### Canvas Editor
+- drag/drop visual editing of element nodes
+- properties and style editing
+- undo/redo support
+- page-aware editing workflow
+
+### Block / Interaction Editor
+- event-driven block chains per element/page context
+- nested block support via parent-child relationships
+- block enable/disable + collapse behavior
+- drag-and-drop top-level reordering flow
+
+### Code Generation
+- shared `CodeGenerator` contract
+- current concrete generator: `HtmlCodeGenerator`
+- Android-side interaction code generation via `BlockJavaScriptGenerator`
 
 ---
 
 ## Tech Stack
 
-### Core
-- **Kotlin** `2.0.21`
-- **Gradle** `8.9`
-- **AGP** `8.5.2`
-- **Java** `17`
-
-### UI / Android
-- Jetpack Compose + Material 3
+- Kotlin `2.0.21`
+- Gradle `8.9`
+- Android Gradle Plugin `8.5.2`
+- Java `17`
+- Compose Multiplatform `1.7.0` + Material 3
 - Navigation Compose
-- Lifecycle ViewModel + Compose lifecycle integration
-
-### Architecture / DI
 - Hilt (`@HiltAndroidApp`, `@AndroidEntryPoint`, `@HiltViewModel`)
-- MVI-style sealed UI states in ViewModels
-- Use-case-driven domain layer
-
-### Data / Networking
-- Room (`v2` DB schema currently exported)
 - Coroutines + Flow
+- Room `2.7.0`
 - kotlinx.serialization
-- Ktor client (Android engine)
-
-### Quality
-- ktlint
-- detekt
-- Android lint
-- GitHub Actions CI pipeline
+- Ktor client
+- Coil
+- DataStore Preferences
+- ktlint + detekt + Android lint
 
 ---
 
-## Project Structure
+## Repository Structure
 
 ```text
 webforge-studio/
-├─ androidApp/                       # Android application module (UI, navigation, DI, domain use cases)
+├─ androidApp/
 │  └─ src/main/kotlin/com/webforge/studio/
-│     ├─ ui/                         # Compose screens/components/theme
-│     ├─ domain/usecase/             # Application use cases
-│     ├─ di/                         # Hilt module/providers
-│     └─ network/                    # Ktor HttpClient factory
-├─ shared/                           # Kotlin Multiplatform shared module
+│     ├─ ui/                    # Compose screens/components/theme
+│     ├─ engine/                # Android-side JS block generation
+│     ├─ di/                    # Hilt modules
+│     ├─ domain/usecase/        # Domain use cases
+│     └─ network/               # Ktor client setup
+├─ shared/
 │  ├─ src/commonMain/kotlin/com/webforge/studio/
-│  │  ├─ model/                      # Shared data models
-│  │  ├─ engine/                     # Code generation contracts/implementations
-│  │  └─ repository/                 # Repository interfaces
+│  │  ├─ model/                 # Shared models and block descriptors
+│  │  ├─ engine/                # Code generation contracts + HTML generator
+│  │  └─ repository/            # Shared repository contracts
 │  └─ src/androidMain/kotlin/com/webforge/studio/repository/
-│     └─ ProjectRepositoryImpl.kt    # Room entities, DAOs, DB, Android repository impls
-├─ shared/schemas/                   # Exported Room schema JSON files
-└─ .github/workflows/build.yml       # CI/CD pipeline
+│     └─ ProjectRepositoryImpl.kt  # Room entities/DAO/DB/repository impl
+├─ shared/schemas/              # Exported Room schemas
+└─ .github/workflows/           # CI workflows
 ```
 
 ---
 
-## Architecture Notes
+## Navigation
 
-- **Single-activity Compose app** (`MainActivity`)
-- **Unidirectional state flow** from ViewModel to UI
-- **Repository pattern** with Room-backed Android implementations
-- **Use cases** separate domain operations from UI state management
-- **DI graph** assembled in `AppModule`
-
-Main navigation routes:
+Main routes:
 - `home`
 - `new_project`
 - `canvas/{projectId}`
+- `block_editor/{projectId}?elementId={elementId}`
 
 ---
 
 ## Prerequisites
 
-- JDK 17
-- Android SDK (compile/target SDK 35)
 - Android Studio (latest stable recommended)
+- JDK 17
+- Android SDK 35 (compile/target)
 
 ---
 
 ## Getting Started
 
-1. Clone the repository.
-2. Open it in Android Studio.
-3. Ensure Android SDK + JDK 17 are configured.
+1. Clone this repository.
+2. Open in Android Studio.
+3. Ensure JDK 17 and Android SDK are configured.
 4. Sync Gradle.
-5. Run the `androidApp` configuration on an emulator/device.
+5. Run the `androidApp` app configuration on emulator/device.
 
-CLI build:
+CLI examples:
 
 ```bash
 ./gradlew :androidApp:assembleDebug
+./gradlew check build
 ```
 
 ---
 
-## Quality Checks
+## Quality & Validation
 
-Run formatting/lint/static analysis:
+Common checks:
 
 ```bash
-./gradlew ktlintCheck detekt :androidApp:lint :shared:lint --no-configuration-cache --continue
+./gradlew check build
 ```
 
-Run unit tests:
-
-```bash
-./gradlew :androidApp:testDebugUnitTest :shared:testDebugUnitTest --no-configuration-cache --continue
-```
+You can also run module-specific checks as needed (ktlint, detekt, lint, unit tests).
 
 ---
 
-## CI Pipeline
+## Data Layer Notes
 
-GitHub Actions workflow (`.github/workflows/build.yml`) includes:
-- Code quality (ktlint, detekt, lint)
-- Unit test stage + coverage artifact publishing
-- Security/dependency scan stages
-- Build/release oriented jobs and artifacts
-
-Triggers:
-- Push to `main` / `develop`
-- Pull requests to `main` / `develop`
-- Manual dispatch (`workflow_dispatch`) with optional inputs
-
----
-
-## Current Scope & Notes
-
-- The code generator contract supports multiple targets, while the provided concrete generator is HTML.
-- Room DB currently uses destructive migration fallback during active development.
-- Room schemas are exported under `shared/schemas`.
+- Room schemas are exported in `shared/schemas` (`shared/build.gradle.kts`).
+- Current Room database version is `3`.
+- Development configuration currently uses destructive migration fallback.
 
 ---
 
 ## License
 
-No license file is currently included in this repository.  
-If needed, add a `LICENSE` file to define usage terms.
+No LICENSE file is currently included. Add one to define usage terms.

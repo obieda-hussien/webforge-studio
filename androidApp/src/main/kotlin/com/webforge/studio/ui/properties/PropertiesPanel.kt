@@ -57,6 +57,7 @@ fun PropertiesPanel(
     element: ElementNode,
     onLabelChange: (String) -> Unit,
     onPropertiesChange: (Map<String, String>) -> Unit,
+    onEditInteractions: () -> Unit,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -86,6 +87,11 @@ fun PropertiesPanel(
                     )
                 }
             }
+            AssistChip(
+                onClick = onEditInteractions,
+                label = { Text(stringResource(R.string.properties_interactions)) },
+                modifier = Modifier.padding(top = Dimens.SpaceXs),
+            )
 
             HorizontalDivider(modifier = Modifier.padding(vertical = Dimens.SpaceSm))
 

@@ -9,10 +9,12 @@ import com.webforge.studio.domain.usecase.GetPagesByProjectUseCase
 import com.webforge.studio.domain.usecase.GetProjectByIdUseCase
 import com.webforge.studio.engine.CodeGenerator
 import com.webforge.studio.engine.GeneratedCode
+import com.webforge.studio.engine.BlockJavaScriptGenerator
 import com.webforge.studio.model.ElementNode
 import com.webforge.studio.model.ElementType
 import com.webforge.studio.model.Page
 import com.webforge.studio.model.ProjectModel
+import com.webforge.studio.repository.BlockRepository
 import com.webforge.studio.ui.util.UiText
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineExceptionHandler
@@ -109,6 +111,7 @@ class CanvasViewModel @Inject constructor(
     private val getPagesByProject: GetPagesByProjectUseCase,
     private val addPageToProject: AddPageToProjectUseCase,
     private val codeGenerator: CodeGenerator,
+    private val blockRepository: BlockRepository,
 ) : ViewModel() {
 
     private val projectId: String = requireNotNull(savedStateHandle["projectId"]) {
@@ -360,14 +363,25 @@ class CanvasViewModel @Inject constructor(
 
     fun onGenerateCode() {
         val ready = _uiState.value as? CanvasUiState.Ready ?: return
-        val root = ElementNode(
-            id = "root",
-            type = ElementType.CONTAINER,
-            label = "root",
-            children = ready.elements,
-        )
-        val generated = codeGenerator.generate(ready.project, root)
-        _uiState.update { (it as? CanvasUiState.Ready)?.copy(generatedCode = generated) ?: it }
+        viewModelScope.launch {
+            val root = ElementNode(
+                id = "root",
+                type = ElementType.CONTAINER,
+                label = "root",
+                children = ready.elements,
+            )
+            val generated = codeGenerator.generate(ready.project, root)
+            val jsGenerator = BlockJavaScriptGenerator()
+            val chainsByElement = buildMap<String?, List<com.webforge.studio.model.BlockChain>> {
+                put(null, blockRepository.getChainsByElement(null))
+                ready.elements.forEach { element ->
+                    put(element.id, blockRepository.getChainsByElement(element.id))
+                }
+            }.filterValues { it.isNotEmpty() }
+            val appJs = jsGenerator.generateAppJs(chainsByElement)
+            val merged = generated.copy(files = generated.files + mapOf("app.js" to appJs))
+            _uiState.update { (it as? CanvasUiState.Ready)?.copy(generatedCode = merged) ?: it }
+        }
     }
 
     // ------------------------------------------------------------------

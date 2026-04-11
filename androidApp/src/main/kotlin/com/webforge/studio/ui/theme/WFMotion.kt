@@ -8,6 +8,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntSize
 
 /** Shared animation specs for the WebForge Studio design system. */
 object WFMotion {
@@ -26,6 +28,14 @@ object WFMotion {
     val fastSpatialOffset = spring<Offset>(
         dampingRatio = Spring.DampingRatioMediumBouncy,
         stiffness = Spring.StiffnessMedium,
+    )
+    val fastSpatialDp = spring<Dp>(
+        dampingRatio = Spring.DampingRatioMediumBouncy,
+        stiffness = Spring.StiffnessMedium,
+    )
+    val defaultSpatialSize = spring<IntSize>(
+        dampingRatio = Spring.DampingRatioLowBouncy,
+        stiffness = Spring.StiffnessMediumLow,
     )
     val enterFade = fadeIn(animationSpec = tween(200, easing = EaseOut))
     val exitFade = fadeOut(animationSpec = tween(150, easing = EaseIn))
