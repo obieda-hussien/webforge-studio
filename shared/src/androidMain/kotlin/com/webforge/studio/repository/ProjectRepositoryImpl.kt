@@ -9,12 +9,21 @@ import androidx.room.OnConflictStrategy
 import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.RoomDatabase
+import androidx.room.Transaction
+import com.webforge.studio.model.BlockChain
+import com.webforge.studio.model.BlockEventType
+import com.webforge.studio.model.BlockNode
+import com.webforge.studio.model.BlockType
 import com.webforge.studio.model.OutputType
 import com.webforge.studio.model.ProjectModel
 import com.webforge.studio.model.TargetPlatform
 import com.webforge.studio.model.ThemeConfig
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
 import javax.inject.Inject
 
 // ---------------------------------------------------------------------------
@@ -212,17 +221,127 @@ interface PageDao {
 }
 
 // ---------------------------------------------------------------------------
+// Room Entity — Block Chains / Nodes
+// ---------------------------------------------------------------------------
+
+@Entity(tableName = "block_chains")
+data class BlockChainEntity(
+    @PrimaryKey
+    @ColumnInfo(name = "id")
+    val id: String,
+    @ColumnInfo(name = "element_id")
+    val elementId: String?,
+    @ColumnInfo(name = "event_type")
+    val eventType: String,
+)
+
+@Entity(tableName = "block_nodes")
+data class BlockNodeEntity(
+    @PrimaryKey
+    @ColumnInfo(name = "id")
+    val id: String,
+    @ColumnInfo(name = "chain_id")
+    val chainId: String,
+    @ColumnInfo(name = "type")
+    val type: String,
+    @ColumnInfo(name = "node_order")
+    val order: Int,
+    @ColumnInfo(name = "parameters_json")
+    val parametersJson: String,
+    @ColumnInfo(name = "connected_chain_id")
+    val connectedChainId: String?,
+    @ColumnInfo(name = "parent_block_id")
+    val parentBlockId: String?,
+    @ColumnInfo(name = "is_disabled")
+    val isDisabled: Boolean,
+)
+
+private val blockJson = Json { ignoreUnknownKeys = true }
+
+private fun BlockChainEntity.toDomain(nodes: List<BlockNode>) = BlockChain(
+    id = id,
+    elementId = elementId,
+    eventType = BlockEventType.entries.firstOrNull { it.name == eventType } ?: BlockEventType.ON_CLICK,
+    blocks = nodes.sortedBy { it.order },
+)
+
+private fun BlockChain.toEntity() = BlockChainEntity(
+    id = id,
+    elementId = elementId,
+    eventType = eventType.name,
+)
+
+private fun BlockNodeEntity.toDomain() = BlockNode(
+    id = id,
+    chainId = chainId,
+    type = BlockType.entries.firstOrNull { it.name == type } ?: BlockType.CONSOLE_LOG,
+    order = order,
+    parameters = runCatching {
+        blockJson.decodeFromString<Map<String, JsonPrimitive>>(parametersJson)
+    }.getOrDefault(emptyMap()),
+    connectedChainId = connectedChainId,
+    parentBlockId = parentBlockId,
+    isDisabled = isDisabled,
+)
+
+private fun BlockNode.toEntity() = BlockNodeEntity(
+    id = id,
+    chainId = chainId,
+    type = type.name,
+    order = order,
+    parametersJson = blockJson.encodeToString(parameters),
+    connectedChainId = connectedChainId,
+    parentBlockId = parentBlockId,
+    isDisabled = isDisabled,
+)
+
+@Dao
+interface BlockChainDao {
+    @Query("SELECT * FROM block_chains WHERE ((:elementId IS NULL AND element_id IS NULL) OR element_id = :elementId) ORDER BY id ASC")
+    fun observeByElement(elementId: String?): Flow<List<BlockChainEntity>>
+
+    @Query("SELECT * FROM block_chains WHERE id = :chainId LIMIT 1")
+    suspend fun getById(chainId: String): BlockChainEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(chain: BlockChainEntity)
+
+    @Query("DELETE FROM block_chains WHERE id = :chainId")
+    suspend fun deleteById(chainId: String)
+}
+
+@Dao
+interface BlockNodeDao {
+    @Query("SELECT * FROM block_nodes WHERE chain_id = :chainId ORDER BY node_order ASC")
+    fun observeByChain(chainId: String): Flow<List<BlockNodeEntity>>
+
+    @Query("SELECT * FROM block_nodes WHERE chain_id = :chainId ORDER BY node_order ASC")
+    suspend fun getByChain(chainId: String): List<BlockNodeEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(node: BlockNodeEntity)
+
+    @Query("DELETE FROM block_nodes WHERE id = :nodeId")
+    suspend fun deleteById(nodeId: String)
+
+    @Query("DELETE FROM block_nodes WHERE chain_id = :chainId")
+    suspend fun deleteByChain(chainId: String)
+}
+
+// ---------------------------------------------------------------------------
 // Room Database (version 2 — adds pages table + new project columns)
 // ---------------------------------------------------------------------------
 
 @Database(
-    entities = [ProjectEntity::class, PageEntity::class],
-    version = 2,
+    entities = [ProjectEntity::class, PageEntity::class, BlockChainEntity::class, BlockNodeEntity::class],
+    version = 3,
     exportSchema = true,
 )
 abstract class WebForgeDatabase : RoomDatabase() {
     abstract fun projectDao(): ProjectDao
     abstract fun pageDao(): PageDao
+    abstract fun blockChainDao(): BlockChainDao
+    abstract fun blockNodeDao(): BlockNodeDao
 }
 
 // ---------------------------------------------------------------------------
@@ -271,4 +390,55 @@ class PageRepositoryImpl @Inject constructor(
 
     override suspend fun deletePage(id: String) =
         dao.deleteById(id)
+}
+
+class BlockRepositoryImpl @Inject constructor(
+    private val chainDao: BlockChainDao,
+    private val nodeDao: BlockNodeDao,
+) : BlockRepository {
+
+    override fun observeChainsByElement(elementId: String?): Flow<List<BlockChain>> =
+        chainDao.observeByElement(elementId).map { chains ->
+            chains.map { chain ->
+                val nodes = nodeDao.observeByChain(chain.id).first().map { it.toDomain() }
+                chain.toDomain(nodes)
+            }
+        }
+
+    override suspend fun getChainsByElement(elementId: String?): List<BlockChain> =
+        observeChainsByElement(elementId).first()
+
+    override suspend fun getChainById(chainId: String): BlockChain? {
+        val chain = chainDao.getById(chainId) ?: return null
+        val nodes = nodeDao.getByChain(chainId).map { it.toDomain() }
+        return chain.toDomain(nodes)
+    }
+
+    override suspend fun upsertChain(chain: BlockChain) {
+        chainDao.upsert(chain.toEntity())
+        replaceNodes(chain.id, chain.blocks)
+    }
+
+    @Transaction
+    override suspend fun deleteChain(chainId: String) {
+        nodeDao.deleteByChain(chainId)
+        chainDao.deleteById(chainId)
+    }
+
+    override fun observeNodes(chainId: String): Flow<List<BlockNode>> =
+        nodeDao.observeByChain(chainId).map { list -> list.map { it.toDomain() } }
+
+    override suspend fun upsertNode(node: BlockNode) {
+        nodeDao.upsert(node.toEntity())
+    }
+
+    override suspend fun deleteNode(nodeId: String) {
+        nodeDao.deleteById(nodeId)
+    }
+
+    @Transaction
+    override suspend fun replaceNodes(chainId: String, nodes: List<BlockNode>) {
+        nodeDao.deleteByChain(chainId)
+        nodes.sortedBy { it.order }.forEach { nodeDao.upsert(it.copy(chainId = chainId).toEntity()) }
+    }
 }

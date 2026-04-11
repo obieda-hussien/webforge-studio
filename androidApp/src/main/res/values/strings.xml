@@ -70,5 +70,6 @@
     <string name="dialog_cancel">Cancel</string>
     <string name="dialog_confirm">Confirm</string>
     <string name="section_expand">Expand section</string>
+    <string name="properties_interactions">Interactions</string>
     <string name="section_collapse">Collapse section</string>
 </resources>

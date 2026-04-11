@@ -5,6 +5,8 @@ import androidx.room.Room
 import com.webforge.studio.engine.CodeGenerator
 import com.webforge.studio.engine.HtmlCodeGenerator
 import com.webforge.studio.network.WebForgeHttpClient
+import com.webforge.studio.repository.BlockRepository
+import com.webforge.studio.repository.BlockRepositoryImpl
 import com.webforge.studio.repository.PageRepository
 import com.webforge.studio.repository.PageRepositoryImpl
 import com.webforge.studio.repository.ProjectRepository
@@ -57,6 +59,15 @@ object AppModule {
     fun providePageRepository(
         database: WebForgeDatabase,
     ): PageRepository = PageRepositoryImpl(database.pageDao())
+
+    @Provides
+    @Singleton
+    fun provideBlockRepository(
+        database: WebForgeDatabase,
+    ): BlockRepository = BlockRepositoryImpl(
+        chainDao = database.blockChainDao(),
+        nodeDao = database.blockNodeDao(),
+    )
 
     @Provides
     @Singleton

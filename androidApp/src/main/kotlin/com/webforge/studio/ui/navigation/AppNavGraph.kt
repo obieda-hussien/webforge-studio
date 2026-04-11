@@ -6,6 +6,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.webforge.studio.ui.blockeditor.BlockEditorScreen
 import com.webforge.studio.ui.canvas.CanvasScreen
 import com.webforge.studio.ui.home.HomeScreen
 import com.webforge.studio.ui.newproject.NewProjectScreen
@@ -15,8 +16,10 @@ object Routes {
     const val HOME = "home"
     const val NEW_PROJECT = "new_project"
     const val CANVAS = "canvas/{projectId}"
+    const val BLOCK_EDITOR = "block_editor/{projectId}?elementId={elementId}"
 
     fun canvas(projectId: String) = "canvas/$projectId"
+    fun blockEditor(projectId: String, elementId: String?) = "block_editor/$projectId?elementId=${elementId ?: "null"}"
 }
 
 /**
@@ -60,6 +63,26 @@ fun AppNavGraph() {
             ),
         ) {
             CanvasScreen(
+                onBack = { navController.popBackStack() },
+                onOpenInteractions = { elementId ->
+                    val projectId = requireNotNull(it.arguments?.getString("projectId"))
+                    navController.navigate(Routes.blockEditor(projectId, elementId))
+                },
+            )
+        }
+
+        composable(
+            route = Routes.BLOCK_EDITOR,
+            arguments = listOf(
+                navArgument("projectId") { type = NavType.StringType },
+                navArgument("elementId") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = "null"
+                },
+            ),
+        ) {
+            BlockEditorScreen(
                 onBack = { navController.popBackStack() },
             )
         }

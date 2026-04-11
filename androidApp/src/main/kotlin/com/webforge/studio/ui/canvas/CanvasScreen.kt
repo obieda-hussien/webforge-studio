@@ -46,6 +46,7 @@ import com.webforge.studio.ui.theme.Dimens
 @Composable
 fun CanvasScreen(
     onBack: () -> Unit,
+    onOpenInteractions: (String) -> Unit,
     viewModel: CanvasViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -247,6 +248,7 @@ fun CanvasScreen(
                                 onPropertiesChange = {
                                     viewModel.onUpdateElementProperties(selectedElement.id, it)
                                 },
+                                onEditInteractions = { onOpenInteractions(selectedElement.id) },
                                 onDelete = { viewModel.onRemoveElement(selectedElement.id) },
                                 modifier = Modifier.width(Dimens.PropertiesPanelWidth),
                             )
