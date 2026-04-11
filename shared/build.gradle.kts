@@ -19,6 +19,7 @@ kotlin {
         commonMain.dependencies {
             implementation(libs.kotlinx.coroutines.core)
             implementation(libs.kotlinx.serialization.json)
+            implementation(libs.javax.inject)
         }
 
         androidMain.dependencies {

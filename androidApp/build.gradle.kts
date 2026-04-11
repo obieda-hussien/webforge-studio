@@ -44,8 +44,10 @@ dependencies {
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.material3)
     implementation(libs.compose.animation)
+    implementation(libs.compose.material.icons.extended)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.room.runtime)
 
     // Hilt
     implementation(libs.hilt.android)
