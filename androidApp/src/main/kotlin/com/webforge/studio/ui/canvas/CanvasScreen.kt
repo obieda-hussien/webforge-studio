@@ -36,7 +36,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -60,8 +59,8 @@ fun CanvasScreen(
     viewModel: CanvasViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    var showCodeDialog by rememberSaveable { mutableStateOf(false) }
-    var codePreviewMode by rememberSaveable { mutableStateOf(false) }
+    var showCodeDialog by remember { mutableStateOf(false) }
+    var codePreviewMode by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -329,7 +328,7 @@ fun CanvasScreen(
                                                     stopLoading()
                                                     loadUrl("about:blank")
                                                     removeAllViews()
-                                                    destroy()
+                                                    post { destroy() }
                                                 }
                                                 previewWebView = null
                                             }
@@ -346,9 +345,14 @@ fun CanvasScreen(
                                                 }
                                             },
                                             update = { webView ->
+                                                val htmlContent = debouncedHtml
+                                                if (htmlContent.isNullOrBlank()) {
+                                                    webView.loadUrl("about:blank")
+                                                    return@AndroidView
+                                                }
                                                 webView.loadDataWithBaseURL(
                                                     null,
-                                                    debouncedHtml.orEmpty(),
+                                                    htmlContent,
                                                     "text/html",
                                                     "utf-8",
                                                     null,

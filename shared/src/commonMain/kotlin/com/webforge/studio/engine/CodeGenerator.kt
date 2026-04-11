@@ -8,6 +8,15 @@ import com.webforge.studio.model.SEOConfig
 import com.webforge.studio.model.TargetPlatform
 import kotlinx.serialization.json.Json
 
+private val nativeElementAttributes = setOf(
+    "src",
+    "href",
+    "class",
+    "className",
+    "alt",
+    "placeholder",
+)
+
 interface CodeGenerator {
     fun generate(project: ProjectModel, rootElement: ElementNode, page: Page? = null): GeneratedCode
 }
@@ -76,7 +85,7 @@ class ReactCodeGenerator : CodeGenerator {
             appendLine("createRoot(document.getElementById(\"root\")).render(")
             appendLine("  <React.StrictMode>")
             appendLine("    <App />")
-            appendLine("  </React.StrictMode>,")
+            appendLine("  </React.StrictMode>")
             appendLine(");")
         }
         val indexHtml = buildString {
@@ -155,6 +164,7 @@ private fun renderSeoTags(seo: SEOConfig, fallbackTitle: String, indent: String)
     if (seo.twitterDescription.isNotBlank()) appendLine("$indent<meta name=\"twitter:description\" content=\"${escapeHtml(seo.twitterDescription)}\" />")
     if (seo.twitterImage.isNotBlank()) appendLine("$indent<meta name=\"twitter:image\" content=\"${escapeHtml(seo.twitterImage)}\" />")
     appendLine("$indent<meta name=\"twitter:card\" content=\"${seo.twitterCard.value}\" />")
+    appendLine("$indent<!-- CSP via meta has browser limitations and may be ignored for some directives; prefer response headers in production deployments. -->")
     appendLine("$indent<meta http-equiv=\"Content-Security-Policy\" content=\"${escapeHtml(defaultCspValue())}\" />")
     val safeJsonLd = sanitizeJsonLd(seo.structuredDataJson)
     if (!safeJsonLd.isNullOrBlank()) {
@@ -229,10 +239,7 @@ private fun reactClassAttribute(properties: Map<String, String>): String {
     return if (value.isBlank()) "" else " className=\"${escapeHtml(value)}\""
 }
 
-private fun isNativeElementAttribute(key: String): Boolean = when (key) {
-    "src", "href", "class", "className", "alt", "placeholder" -> true
-    else -> false
-}
+private fun isNativeElementAttribute(key: String): Boolean = key in nativeElementAttributes
 
 private fun escapeHtml(value: String): String = value
     .replace("&", "&amp;")

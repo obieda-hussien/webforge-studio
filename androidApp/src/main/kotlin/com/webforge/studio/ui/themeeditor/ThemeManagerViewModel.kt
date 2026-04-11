@@ -33,6 +33,11 @@ class ThemeManagerViewModel @Inject constructor(
     private val getProjectById: GetProjectByIdUseCase,
     private val updateProject: UpdateProjectUseCase,
 ) : ViewModel() {
+    private companion object {
+        const val SECONDARY_COLOR_FACTOR = 0.75f
+        const val BACKGROUND_COLOR_FACTOR = 1.9f
+    }
+
     private val projectId: String = requireNotNull(savedStateHandle["projectId"])
     private val _uiState = MutableStateFlow<ThemeManagerUiState>(ThemeManagerUiState.Loading)
     val uiState: StateFlow<ThemeManagerUiState> = _uiState.asStateFlow()
@@ -48,9 +53,9 @@ class ThemeManagerViewModel @Inject constructor(
     }
 
     fun onSeedChange(hex: String) {
-        val primary = normalizeHex(hex)
-        val secondary = shiftColor(primary, 0.75f)
-        val background = shiftColor(primary, 1.9f)
+        val primary = ThemeColorTransformer.normalizeHex(hex)
+        val secondary = ThemeColorTransformer.shiftColor(primary, SECONDARY_COLOR_FACTOR)
+        val background = ThemeColorTransformer.shiftColor(primary, BACKGROUND_COLOR_FACTOR)
         updateConfig {
             it.copy(
                 primaryColor = primary,
@@ -67,7 +72,7 @@ class ThemeManagerViewModel @Inject constructor(
     }
 
     fun onRoleColorChange(role: String, hex: String) {
-        val normalized = normalizeHex(hex)
+        val normalized = ThemeColorTransformer.normalizeHex(hex)
         updateConfig {
             val updatedConfig = when (role) {
                 "primary" -> it.copy(primaryColor = normalized)
@@ -169,19 +174,8 @@ class ThemeManagerViewModel @Inject constructor(
     }
 
     private fun parseSeed(hex: String): Int = runCatching {
-        normalizeHex(hex).removePrefix("#").toInt(16)
+        ThemeColorTransformer.normalizeHex(hex).removePrefix("#").toInt(16)
     }.getOrDefault(0x6750A4)
-
-    private fun normalizeHex(value: String): String {
-        val cleaned = value.trim().removePrefix("#")
-        val normalized = when {
-            cleaned.length == 3 && cleaned.all { it.isLetterOrDigit() } ->
-                cleaned.map { "$it$it" }.joinToString("")
-            cleaned.length >= 6 -> cleaned.take(6)
-            else -> cleaned.padEnd(6, '0')
-        }
-        return "#${normalized.uppercase()}"
-    }
 
     private fun parseCoolorsPalette(url: String): List<String> {
         val tail = url.substringAfterLast("/")
@@ -192,12 +186,4 @@ class ThemeManagerViewModel @Inject constructor(
             }
     }
 
-    private fun shiftColor(color: String, factor: Float): String {
-        val clean = normalizeHex(color).removePrefix("#")
-        val r = clean.substring(0, 2).toInt(16)
-        val g = clean.substring(2, 4).toInt(16)
-        val b = clean.substring(4, 6).toInt(16)
-        fun shift(channel: Int): Int = ((channel * factor).toInt()).coerceIn(0, 255)
-        return "#%02X%02X%02X".format(shift(r), shift(g), shift(b))
-    }
 }
