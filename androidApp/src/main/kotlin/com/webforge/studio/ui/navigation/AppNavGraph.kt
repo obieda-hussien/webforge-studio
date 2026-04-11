@@ -10,6 +10,8 @@ import com.webforge.studio.ui.blockeditor.BlockEditorScreen
 import com.webforge.studio.ui.canvas.CanvasScreen
 import com.webforge.studio.ui.home.HomeScreen
 import com.webforge.studio.ui.newproject.NewProjectScreen
+import com.webforge.studio.ui.seo.SeoManagerScreen
+import com.webforge.studio.ui.themeeditor.ThemeManagerScreen
 
 /** Navigation route constants used throughout the app. */
 object Routes {
@@ -17,9 +19,13 @@ object Routes {
     const val NEW_PROJECT = "new_project"
     const val CANVAS = "canvas/{projectId}"
     const val BLOCK_EDITOR = "block_editor/{projectId}?elementId={elementId}"
+    const val THEME_MANAGER = "theme_manager/{projectId}"
+    const val SEO_MANAGER = "seo_manager/{projectId}/{pageId}"
 
     fun canvas(projectId: String) = "canvas/$projectId"
     fun blockEditor(projectId: String, elementId: String?) = "block_editor/$projectId?elementId=${elementId ?: "null"}"
+    fun themeManager(projectId: String) = "theme_manager/$projectId"
+    fun seoManager(projectId: String, pageId: String) = "seo_manager/$projectId/$pageId"
 }
 
 /**
@@ -68,6 +74,14 @@ fun AppNavGraph() {
                     val projectId = requireNotNull(it.arguments?.getString("projectId"))
                     navController.navigate(Routes.blockEditor(projectId, elementId))
                 },
+                onOpenThemeManager = {
+                    val projectId = requireNotNull(it.arguments?.getString("projectId"))
+                    navController.navigate(Routes.themeManager(projectId))
+                },
+                onOpenSeoManager = { pageId ->
+                    val projectId = requireNotNull(it.arguments?.getString("projectId"))
+                    navController.navigate(Routes.seoManager(projectId, pageId))
+                },
             )
         }
 
@@ -85,6 +99,23 @@ fun AppNavGraph() {
             BlockEditorScreen(
                 onBack = { navController.popBackStack() },
             )
+        }
+
+        composable(
+            route = Routes.THEME_MANAGER,
+            arguments = listOf(navArgument("projectId") { type = NavType.StringType }),
+        ) {
+            ThemeManagerScreen(onBack = { navController.popBackStack() })
+        }
+
+        composable(
+            route = Routes.SEO_MANAGER,
+            arguments = listOf(
+                navArgument("projectId") { type = NavType.StringType },
+                navArgument("pageId") { type = NavType.StringType },
+            ),
+        ) {
+            SeoManagerScreen(onBack = { navController.popBackStack() })
         }
     }
 }

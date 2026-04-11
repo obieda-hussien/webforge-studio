@@ -370,7 +370,8 @@ class CanvasViewModel @Inject constructor(
                 label = "root",
                 children = ready.elements,
             )
-            val generated = codeGenerator.generate(ready.project, root)
+            val currentPage = ready.pages.firstOrNull { it.id == ready.currentPageId }
+            val generated = codeGenerator.generate(ready.project, root, currentPage)
             val jsGenerator = BlockJavaScriptGenerator()
             val chainsByElement = buildMap<String?, List<com.webforge.studio.model.BlockChain>> {
                 put(null, blockRepository.getChainsByElement(null))

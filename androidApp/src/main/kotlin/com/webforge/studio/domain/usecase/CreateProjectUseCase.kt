@@ -52,9 +52,20 @@ class CreateProjectUseCase @Inject constructor(
             targetPlatform = targetPlatform,
             colorSeed = colorSeed,
             fontPair = fontPair,
-            themeConfig = ThemeConfig(isDarkMode = isDarkMode),
+            themeConfig = ThemeConfig(
+                isDarkMode = isDarkMode,
+                darkModeDefault = isDarkMode,
+                colorSeed = toRgbSeed(colorSeed),
+                fontPrimary = fontPair.substringBefore("/").trim().ifBlank { "Roboto" },
+                fontSecondary = fontPair.substringAfter("/", "Inter").trim(),
+            ),
         )
         repository.upsertProject(project)
         return project
+    }
+
+    private fun toRgbSeed(colorValue: Long): Int {
+        // Theme seed operates on RGB only; keep lower 24 bits and discard alpha channel.
+        return (colorValue and 0x00FFFFFF).toInt()
     }
 }

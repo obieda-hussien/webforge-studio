@@ -20,4 +20,5 @@ data class Page(
     val route: String,
     val isHome: Boolean = false,
     val order: Int = 0,
+    val seoConfig: SEOConfig = SEOConfig(),
 )
