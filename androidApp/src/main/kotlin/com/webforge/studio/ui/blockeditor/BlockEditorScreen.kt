@@ -21,12 +21,14 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Redo
+import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
@@ -104,13 +106,13 @@ fun BlockEditorScreen(
                         },
                         actions = {
                             IconButton(onClick = viewModel::onUndo, enabled = state.canUndo) {
-                                Icon(Icons.Default.ArrowUpward, contentDescription = "Undo")
+                                Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = "Undo")
                             }
                             IconButton(onClick = viewModel::onRedo, enabled = state.canRedo) {
-                                Icon(Icons.Default.ArrowDownward, contentDescription = "Redo")
+                                Icon(Icons.AutoMirrored.Filled.Redo, contentDescription = "Redo")
                             }
                             IconButton(onClick = viewModel::onToggleVariableManager) {
-                                Icon(Icons.Default.Refresh, contentDescription = "Toggle Variable Manager")
+                                Icon(Icons.Default.Code, contentDescription = "Toggle Variable Manager")
                             }
                         },
                     )

@@ -400,7 +400,7 @@ class BlockRepositoryImpl @Inject constructor(
     override fun observeChainsByElement(elementId: String?): Flow<List<BlockChain>> =
         chainDao.observeByElement(elementId).map { chains ->
             chains.map { chain ->
-                val nodes = nodeDao.observeByChain(chain.id).first().map { it.toDomain() }
+                val nodes = nodeDao.getByChain(chain.id).map { it.toDomain() }
                 chain.toDomain(nodes)
             }
         }

@@ -281,13 +281,13 @@ object BlockDescriptors {
         putData(BlockType.COOKIE_GET, "Cookie Get", "cookie", listOf(textParam("key", "Key", "token")), "const ${ '$' }{resultVar} = document.cookie;")
 
         // Network
-        putNetwork(BlockType.FETCH_GET, "Fetch GET", "cloud_download", listOf(urlParam("url", "URL", "https://example.com")), "const ${ '$' }{responseVar} = await fetch(${ '$' }{url});")
-        putNetwork(BlockType.FETCH_POST, "Fetch POST", "upload", listOf(urlParam("url", "URL", "https://example.com"), jsonParam("body", "Body", "{}")), "const ${ '$' }{responseVar} = await fetch(${ '$' }{url}, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(${ '$' }{body}) });")
-        putNetwork(BlockType.FETCH_PUT, "Fetch PUT", "sync_alt", listOf(urlParam("url", "URL", "https://example.com"), jsonParam("body", "Body", "{}")), "const ${ '$' }{responseVar} = await fetch(${ '$' }{url}, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(${ '$' }{body}) });")
-        putNetwork(BlockType.FETCH_DELETE, "Fetch DELETE", "delete_forever", listOf(urlParam("url", "URL", "https://example.com")), "const ${ '$' }{responseVar} = await fetch(${ '$' }{url}, { method: 'DELETE' });")
+        putNetwork(BlockType.FETCH_GET, "Fetch GET", "cloud_download", false, listOf(urlParam("url", "URL", "https://example.com")), "const ${ '$' }{responseVar} = await fetch(${ '$' }{url});")
+        putNetwork(BlockType.FETCH_POST, "Fetch POST", "upload", false, listOf(urlParam("url", "URL", "https://example.com"), jsonParam("body", "Body", "{}")), "const ${ '$' }{responseVar} = await fetch(${ '$' }{url}, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(${ '$' }{body}) });")
+        putNetwork(BlockType.FETCH_PUT, "Fetch PUT", "sync_alt", false, listOf(urlParam("url", "URL", "https://example.com"), jsonParam("body", "Body", "{}")), "const ${ '$' }{responseVar} = await fetch(${ '$' }{url}, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(${ '$' }{body}) });")
+        putNetwork(BlockType.FETCH_DELETE, "Fetch DELETE", "delete_forever", false, listOf(urlParam("url", "URL", "https://example.com")), "const ${ '$' }{responseVar} = await fetch(${ '$' }{url}, { method: 'DELETE' });")
         putNetwork(BlockType.ON_SUCCESS_RESPONSE, "On Success", "check_circle", true, listOf(exprParam("condition", "Condition", "response.ok")), "if (${ '$' }{condition}) {\n${'$'}{body}\n}")
         putNetwork(BlockType.ON_ERROR_RESPONSE, "On Error", "error", true, listOf(exprParam("condition", "Condition", "!response.ok")), "if (${ '$' }{condition}) {\n${'$'}{body}\n}")
-        putNetwork(BlockType.PARSE_JSON, "Parse JSON", "data_object", listOf(textParam("source", "Source Variable", "response")), "const ${ '$' }{resultVar} = await ${ '$' }{source}.json();")
+        putNetwork(BlockType.PARSE_JSON, "Parse JSON", "data_object", false, listOf(textParam("source", "Source Variable", "response")), "const ${ '$' }{resultVar} = await ${ '$' }{source}.json();")
 
         // Navigation
         putNav(BlockType.NAVIGATE_TO_URL, "Navigate To URL", "language", listOf(urlParam("url", "URL", "https://example.com")), "window.location.href = ${ '$' }{url};")
@@ -390,16 +390,6 @@ object BlockDescriptors {
         template: String,
     ) {
         put(type, BlockTypeDescriptor(name, BlockCategory.DATA, BlockColorToken.RED, icon, parameters, false, true, template))
-    }
-
-    private fun MutableMap<BlockType, BlockTypeDescriptor>.putNetwork(
-        type: BlockType,
-        name: String,
-        icon: String,
-        parameters: List<BlockParameterDefinition>,
-        template: String,
-    ) {
-        put(type, BlockTypeDescriptor(name, BlockCategory.NETWORK, BlockColorToken.PURPLE, icon, parameters, false, true, template))
     }
 
     private fun MutableMap<BlockType, BlockTypeDescriptor>.putNetwork(

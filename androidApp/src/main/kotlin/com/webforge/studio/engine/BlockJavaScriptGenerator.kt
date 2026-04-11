@@ -31,11 +31,13 @@ class BlockJavaScriptGenerator {
         val eventDescriptor = BlockDescriptors.all.getValue(blockTypeForEvent(chain.eventType))
 
         val variableNames = mutableSetOf<String>()
+        val variableMapping = linkedMapOf<String, String>()
         val declarations = chain.blocks
             .filter { it.type == BlockType.DECLARE_VARIABLE }
             .mapNotNull { it.parameters["name"]?.content }
             .map { requested ->
                 val unique = uniqueName(requested.ifBlank { "value" }, variableNames)
+                variableMapping.putIfAbsent(requested, unique)
                 "let $unique;"
             }
 
@@ -43,6 +45,7 @@ class BlockJavaScriptGenerator {
             nodes = bodyNodes,
             allBlocks = chain.blocks,
             indent = 1,
+            variableMapping = variableMapping,
         )
 
         val targetExpr = if (elementId.isNullOrBlank()) "window" else "document.getElementById('$elementId')"
@@ -62,11 +65,14 @@ class BlockJavaScriptGenerator {
         nodes: List<BlockNode>,
         allBlocks: List<BlockNode>,
         indent: Int,
+        variableMapping: Map<String, String>,
     ): String {
         return nodes.joinToString("\n") { node ->
             val descriptor = BlockDescriptors.all.getValue(node.type)
             val codeLine = descriptor.parameters.fold(descriptor.codeTemplate) { acc, param ->
-                acc.replace("${'$'}{${param.name}}", node.parameters[param.name]?.content ?: param.defaultValue)
+                val rawValue = node.parameters[param.name]?.content ?: param.defaultValue
+                val resolvedValue = variableMapping[rawValue] ?: rawValue
+                acc.replace("${'$'}{${param.name}}", resolvedValue)
             }
 
             val childNodes = allBlocks
@@ -74,7 +80,7 @@ class BlockJavaScriptGenerator {
                 .sortedBy { it.order }
 
             val rendered = if (descriptor.hasBodySlot) {
-                val childCode = renderNodes(childNodes, allBlocks, indent + 1)
+                val childCode = renderNodes(childNodes, allBlocks, indent + 1, variableMapping)
                 codeLine.replace("${'$'}{body}", childCode)
             } else {
                 codeLine

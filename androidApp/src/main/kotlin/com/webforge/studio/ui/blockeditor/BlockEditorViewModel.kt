@@ -225,11 +225,12 @@ class BlockEditorViewModel @Inject constructor(
     fun onRenameVariable(oldName: String, newName: String) {
         val clean = newName.trim()
         if (clean.isBlank()) return
+        val variableKeys = setOf("name", "variable", "variableName", "varName", "intervalVar")
         mutateActiveChain { chain ->
             chain.copy(
                 blocks = chain.blocks.map { block ->
                     val updatedParams = block.parameters.mapValues { (key, value) ->
-                        if ((key == "name" || key.contains("var", ignoreCase = true)) && value.content == oldName) {
+                        if (key in variableKeys && value.content == oldName) {
                             JsonPrimitive(clean)
                         } else {
                             value
