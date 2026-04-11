@@ -3,7 +3,7 @@ package com.webforge.studio.di
 import android.content.Context
 import androidx.room.Room
 import com.webforge.studio.engine.CodeGenerator
-import com.webforge.studio.engine.HtmlCodeGenerator
+import com.webforge.studio.engine.PlatformCodeGenerator
 import com.webforge.studio.network.WebForgeHttpClient
 import com.webforge.studio.repository.BlockRepository
 import com.webforge.studio.repository.BlockRepositoryImpl
@@ -71,7 +71,7 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideCodeGenerator(): CodeGenerator = HtmlCodeGenerator()
+    fun provideCodeGenerator(): CodeGenerator = PlatformCodeGenerator()
 
     @Provides
     @Singleton

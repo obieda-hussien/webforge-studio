@@ -14,8 +14,10 @@ import com.webforge.studio.model.BlockChain
 import com.webforge.studio.model.BlockEventType
 import com.webforge.studio.model.BlockNode
 import com.webforge.studio.model.BlockType
+import com.webforge.studio.model.BorderRadiusPreset
 import com.webforge.studio.model.OutputType
 import com.webforge.studio.model.ProjectModel
+import com.webforge.studio.model.SEOConfig
 import com.webforge.studio.model.TargetPlatform
 import com.webforge.studio.model.ThemeConfig
 import kotlinx.coroutines.flow.Flow
@@ -84,6 +86,30 @@ data class ProjectEntity(
 
     @ColumnInfo(name = "theme_is_dark_mode")
     val themeIsDarkMode: Boolean,
+
+    @ColumnInfo(name = "theme_color_seed")
+    val themeColorSeed: Int = 0x6750A4,
+
+    @ColumnInfo(name = "theme_custom_colors_json")
+    val themeCustomColorsJson: String = "{}",
+
+    @ColumnInfo(name = "theme_font_primary")
+    val themeFontPrimary: String = "Roboto",
+
+    @ColumnInfo(name = "theme_font_secondary")
+    val themeFontSecondary: String = "Inter",
+
+    @ColumnInfo(name = "theme_base_spacing")
+    val themeBaseSpacing: Int = 8,
+
+    @ColumnInfo(name = "theme_border_radius")
+    val themeBorderRadius: String = BorderRadiusPreset.ROUNDED.name,
+
+    @ColumnInfo(name = "theme_dark_mode_default")
+    val themeDarkModeDefault: Boolean = false,
+
+    @ColumnInfo(name = "theme_css_variables_json")
+    val themeCssVariablesJson: String = "{}",
 )
 
 // ---------------------------------------------------------------------------
@@ -109,6 +135,19 @@ private fun ProjectEntity.toDomain(): ProjectModel = ProjectModel(
         fontFamily = themeFontFamily,
         baseFontSizeSp = themeBaseFontSizeSp,
         isDarkMode = themeIsDarkMode,
+        colorSeed = themeColorSeed,
+        customColors = runCatching {
+            blockJson.decodeFromString<Map<String, String>>(themeCustomColorsJson)
+        }.getOrDefault(emptyMap()),
+        fontPrimary = themeFontPrimary,
+        fontSecondary = themeFontSecondary,
+        baseSpacing = themeBaseSpacing,
+        borderRadius = BorderRadiusPreset.entries.firstOrNull { it.name == themeBorderRadius }
+            ?: BorderRadiusPreset.ROUNDED,
+        darkModeDefault = themeDarkModeDefault,
+        cssVariables = runCatching {
+            blockJson.decodeFromString<Map<String, String>>(themeCssVariablesJson)
+        }.getOrDefault(emptyMap()),
     ),
 )
 
@@ -130,6 +169,14 @@ private fun ProjectModel.toEntity(): ProjectEntity = ProjectEntity(
     themeFontFamily = themeConfig.fontFamily,
     themeBaseFontSizeSp = themeConfig.baseFontSizeSp,
     themeIsDarkMode = themeConfig.isDarkMode,
+    themeColorSeed = themeConfig.colorSeed,
+    themeCustomColorsJson = blockJson.encodeToString(themeConfig.customColors),
+    themeFontPrimary = themeConfig.fontPrimary,
+    themeFontSecondary = themeConfig.fontSecondary,
+    themeBaseSpacing = themeConfig.baseSpacing,
+    themeBorderRadius = themeConfig.borderRadius.name,
+    themeDarkModeDefault = themeConfig.darkModeDefault,
+    themeCssVariablesJson = blockJson.encodeToString(themeConfig.cssVariables),
 )
 
 // ---------------------------------------------------------------------------
@@ -176,6 +223,9 @@ data class PageEntity(
 
     @ColumnInfo(name = "page_order")
     val order: Int = 0,
+
+    @ColumnInfo(name = "seo_config_json")
+    val seoConfigJson: String = "",
 )
 
 // ---------------------------------------------------------------------------
@@ -189,6 +239,9 @@ private fun PageEntity.toDomain() = com.webforge.studio.model.Page(
     route = route,
     isHome = isHome,
     order = order,
+    seoConfig = runCatching {
+        blockJson.decodeFromString<SEOConfig>(seoConfigJson)
+    }.getOrDefault(SEOConfig()),
 )
 
 private fun com.webforge.studio.model.Page.toEntity() = PageEntity(
@@ -198,6 +251,7 @@ private fun com.webforge.studio.model.Page.toEntity() = PageEntity(
     route = route,
     isHome = isHome,
     order = order,
+    seoConfigJson = blockJson.encodeToString(seoConfig),
 )
 
 // ---------------------------------------------------------------------------
@@ -334,7 +388,7 @@ interface BlockNodeDao {
 
 @Database(
     entities = [ProjectEntity::class, PageEntity::class, BlockChainEntity::class, BlockNodeEntity::class],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class WebForgeDatabase : RoomDatabase() {

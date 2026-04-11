@@ -52,7 +52,13 @@ class CreateProjectUseCase @Inject constructor(
             targetPlatform = targetPlatform,
             colorSeed = colorSeed,
             fontPair = fontPair,
-            themeConfig = ThemeConfig(isDarkMode = isDarkMode),
+            themeConfig = ThemeConfig(
+                isDarkMode = isDarkMode,
+                darkModeDefault = isDarkMode,
+                colorSeed = (colorSeed and 0x00FFFFFF).toInt(),
+                fontPrimary = fontPair.substringBefore("/").trim().ifBlank { "Roboto" },
+                fontSecondary = fontPair.substringAfter("/", "Inter").trim(),
+            ),
         )
         repository.upsertProject(project)
         return project

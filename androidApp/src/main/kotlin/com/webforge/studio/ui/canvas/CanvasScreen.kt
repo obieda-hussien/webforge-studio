@@ -14,6 +14,8 @@ import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Layers
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -35,22 +37,27 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.webforge.studio.R
 import com.webforge.studio.ui.component.WFEmptyState
 import com.webforge.studio.ui.properties.PropertiesPanel
 import com.webforge.studio.ui.theme.Dimens
+import android.webkit.WebView
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CanvasScreen(
     onBack: () -> Unit,
     onOpenInteractions: (String) -> Unit,
+    onOpenThemeManager: () -> Unit,
+    onOpenSeoManager: (String) -> Unit,
     viewModel: CanvasViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var showCodeDialog by remember { mutableStateOf(false) }
+    var codePreviewMode by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -113,6 +120,23 @@ fun CanvasScreen(
                             Icon(
                                 Icons.Default.Code,
                                 contentDescription = stringResource(R.string.canvas_generate_code),
+                            )
+                        }
+                        IconButton(onClick = onOpenThemeManager) {
+                            Icon(
+                                Icons.Default.Palette,
+                                contentDescription = stringResource(R.string.canvas_theme_manager),
+                            )
+                        }
+                        IconButton(
+                            onClick = {
+                                ready.currentPageId?.let(onOpenSeoManager)
+                            },
+                            enabled = ready.currentPageId != null,
+                        ) {
+                            Icon(
+                                Icons.Default.Search,
+                                contentDescription = stringResource(R.string.canvas_seo_manager),
                             )
                         }
                     }
@@ -259,22 +283,52 @@ fun CanvasScreen(
                 // Code preview dialog
                 if (showCodeDialog) {
                     val code = state.generatedCode?.files?.entries?.firstOrNull()
+                    val html = state.generatedCode?.files?.get("index.html")
                     AlertDialog(
                         onDismissRequest = { showCodeDialog = false },
                         title = { Text(stringResource(R.string.canvas_code_dialog_title)) },
                         text = {
                             Column {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = androidx.compose.foundation.layout.Arrangement.End,
+                                ) {
+                                    TextButton(onClick = { codePreviewMode = false }) { Text("Code") }
+                                    TextButton(onClick = { codePreviewMode = true }) { Text("Preview") }
+                                }
                                 code?.let { (fileName, content) ->
-                                    Text(
-                                        text = fileName,
-                                        style = MaterialTheme.typography.labelMedium,
-                                        modifier = Modifier.padding(bottom = Dimens.SpaceSm),
-                                    )
-                                    Text(
-                                        text = content,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        modifier = Modifier.fillMaxWidth(),
-                                    )
+                                    if (!codePreviewMode || html.isNullOrBlank()) {
+                                        Text(
+                                            text = fileName,
+                                            style = MaterialTheme.typography.labelMedium,
+                                            modifier = Modifier.padding(bottom = Dimens.SpaceSm),
+                                        )
+                                        Text(
+                                            text = content,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            modifier = Modifier.fillMaxWidth(),
+                                        )
+                                    } else {
+                                        AndroidView(
+                                            factory = { context ->
+                                                WebView(context).apply {
+                                                    settings.javaScriptEnabled = true
+                                                }
+                                            },
+                                            update = { webView ->
+                                                webView.loadDataWithBaseURL(
+                                                    null,
+                                                    html,
+                                                    "text/html",
+                                                    "utf-8",
+                                                    null,
+                                                )
+                                            },
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(top = Dimens.SpaceSm),
+                                        )
+                                    }
                                 } ?: Text(stringResource(R.string.canvas_code_dialog_empty))
                             }
                         },

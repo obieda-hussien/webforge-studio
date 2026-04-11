@@ -49,6 +49,8 @@
     <string name="canvas_toggle_properties">Toggle properties panel</string>
     <string name="canvas_add_page">Add page</string>
     <string name="canvas_palette_add">Add %1$s to canvas</string>
+    <string name="canvas_theme_manager">Theme manager</string>
+    <string name="canvas_seo_manager">SEO manager</string>
 
     <!-- Properties panel -->
     <string name="properties_panel_title">Properties</string>
@@ -72,4 +74,28 @@
     <string name="section_expand">Expand section</string>
     <string name="properties_interactions">Interactions</string>
     <string name="section_collapse">Collapse section</string>
+
+    <!-- Theme manager -->
+    <string name="theme_manager_title">Theme Manager</string>
+    <string name="theme_randomize">Randomize</string>
+    <string name="theme_export">Export Theme</string>
+    <string name="theme_color_section">Colors</string>
+    <string name="theme_seed_color">Seed color</string>
+    <string name="theme_import_coolors">Import from Coolors URL</string>
+    <string name="theme_import_action">Import palette</string>
+    <string name="theme_font_section">Fonts</string>
+    <string name="theme_font_secondary">Secondary font</string>
+    <string name="theme_spacing_shape_section">Spacing &amp; Shape</string>
+    <string name="theme_dark_mode_default">Dark mode default</string>
+    <string name="theme_custom_css_vars">Custom CSS Variables</string>
+    <string name="theme_add_css_var">Add CSS Variable</string>
+    <string name="theme_export_preview">theme.css preview</string>
+
+    <!-- SEO manager -->
+    <string name="seo_manager_title">SEO Manager</string>
+    <string name="seo_title_label">Title</string>
+    <string name="seo_description_label">Meta description</string>
+    <string name="seo_keywords_label">Keywords</string>
+    <string name="seo_canonical_label">Canonical URL</string>
+    <string name="seo_quick_fix">Quick Fix</string>
 </resources>

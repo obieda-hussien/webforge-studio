@@ -21,4 +21,19 @@ data class ThemeConfig(
     val fontFamily: String = "Roboto",
     val baseFontSizeSp: Float = 16f,
     val isDarkMode: Boolean = false,
+    val colorSeed: Int = 0x6750A4,
+    val customColors: Map<String, String> = emptyMap(),
+    val fontPrimary: String = "Roboto",
+    val fontSecondary: String = "Inter",
+    val baseSpacing: Int = 8,
+    val borderRadius: BorderRadiusPreset = BorderRadiusPreset.ROUNDED,
+    val darkModeDefault: Boolean = false,
+    val cssVariables: Map<String, String> = emptyMap(),
 )
+
+@Serializable
+enum class BorderRadiusPreset {
+    SHARP,
+    ROUNDED,
+    PILL,
+}
